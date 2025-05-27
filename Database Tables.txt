@@ -1,0 +1,21 @@
+CREATE TABLE tickets (
+  id SERIAL PRIMARY KEY,
+  student_id INTEGER REFERENCES users(id),
+  teacher_id INTEGER REFERENCES users(id),
+  subject VARCHAR(255) NOT NULL,
+  message TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  status VARCHAR(50) DEFAULT 'open',
+  response TEXT,
+  responded_at TIMESTAMP
+);
+
+
+CREATE TABLE users (
+  id SERIAL PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  password TEXT NOT NULL,
+  full_name TEXT NOT NULL,
+  role TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
