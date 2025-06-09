@@ -13,9 +13,47 @@ const pool = new Pool({
   user: 'postgres', // change this
   host: 'localhost',
   database: 'postgres',
-  password: '123123a', // change this
+  password: '123456', // change this
   port: 5432,
 });
+
+
+const createTables = async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        full_name TEXT NOT NULL,
+        role TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS tickets (
+        id SERIAL PRIMARY KEY,
+        student_id INTEGER REFERENCES users(id),
+        teacher_id INTEGER REFERENCES users(id),
+        subject VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        status VARCHAR(50) DEFAULT 'open',
+        response TEXT,
+        responded_at TIMESTAMP
+      );
+    `);
+
+    console.log("✅ Tables created successfully");
+
+  } catch (err) {
+    console.error("❌ Error creating tables:", err);
+    process.exit(1);
+  }
+};
+
+createTables();
 
 // Register endpoint
 app.post('/register', async (req, res) => {
@@ -44,6 +82,7 @@ app.post('/register', async (req, res) => {
 
 // Login endpoint
 app.post('/login', async (req, res) => {
+console.log('🔵 Login attempt:', req.body); // ← הוסיפי את זה
   const { email, password } = req.body;
   try {
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
@@ -134,7 +173,46 @@ app.put('/tickets/:ticketId/reply', async (req, res) => {
   }
 });
 
+// Admin endpoints
+app.get('/admin/users', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, email, full_name, role, created_at FROM users ORDER BY created_at DESC'
+    );
+    res.status(200).json(result.rows);
+  } catch (err) {
+    res.status(500).send('Server error');
+  }
+});
 
+app.get('/admin/tickets', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        tickets.*,
+        students.full_name AS student_name,
+        teachers.full_name AS teacher_name
+      FROM tickets
+      JOIN users AS students ON tickets.student_id = students.id
+      JOIN users AS teachers ON tickets.teacher_id = teachers.id
+      ORDER BY tickets.created_at DESC
+    `);
+    res.status(200).json(result.rows);
+  } catch (err) {
+    res.status(500).send('Server error');
+  }
+});
+
+app.delete('/admin/users/:userId', async (req, res) => {
+  const { userId } = req.params;
+  try {
+    await pool.query('DELETE FROM tickets WHERE student_id = $1 OR teacher_id = $1', [userId]);
+    await pool.query('DELETE FROM users WHERE id = $1', [userId]);
+    res.status(200).send('User deleted successfully');
+  } catch (err) {
+    res.status(500).send('Server error');
+  }
+});
 
 app.listen(3001, '0.0.0.0', () => {
   console.log('Backend running on http://0.0.0.0:3001');

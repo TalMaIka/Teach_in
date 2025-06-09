@@ -9,7 +9,6 @@ export default function TicketScreen({ studentId }) {
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    // Charge la liste des professeurs dès que l'écran s'affiche
     const fetchTeachers = async () => {
       try {
         const res = await fetch('http://10.0.2.2:3001/teachers');
@@ -34,7 +33,7 @@ export default function TicketScreen({ studentId }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          student_id: studentId, // 🟩 L'ID réel de l'étudiant connecté
+          student_id: studentId,
           teacher_id: teacherId,
           subject,
           message,
