@@ -11,6 +11,7 @@ export default function TicketScreen({ studentId }) {
   useEffect(() => {
     const fetchTeachers = async () => {
       try {
+        console.log('Fetching teachers...');
         const res = await fetch('http://10.0.2.2:3001/teachers');
         const data = await res.json();
         setTeachers(data);

@@ -3,6 +3,7 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
+const fs = require('fs');
 
 const app = express();
 app.use(cors());
@@ -10,50 +11,53 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 const pool = new Pool({
-  user: 'postgres', // change this
-  host: 'localhost',
-  database: 'postgres',
-  password: '123456', // change this
-  port: 5432,
+  user: 'avnadmin',
+  host: 'pg-1c3eb2a-tal-dcf2.j.aivencloud.com',
+  database: 'defaultdb',
+  password: 'AVNS_r3YiZuAdz-whlUj4ona',
+  port: 14296,
+  ssl: {
+    rejectUnauthorized: true,
+    ca: `-----BEGIN CERTIFICATE-----
+MIIEUDCCArigAwIBAgIUWx24XFk9rewA3YOEas/PZG+Dz/wwDQYJKoZIhvcNAQEM
+BQAwQDE+MDwGA1UEAww1ZTZjMmQ1YmQtYTNiMS00YWQ5LTljOWUtY2Q4MjBhZGYx
+YTUxIEdFTiAxIFByb2plY3QgQ0EwHhcNMjUwNjEwMTkwNzUyWhcNMzUwNjA4MTkw
+NzUyWjBAMT4wPAYDVQQDDDVlNmMyZDViZC1hM2IxLTRhZDktOWM5ZS1jZDgyMGFk
+ZjFhNTEgR0VOIDEgUHJvamVjdCBDQTCCAaIwDQYJKoZIhvcNAQEBBQADggGPADCC
+AYoCggGBAK5wtGhnUAuyIK33rbDHSPcqAWEnbPo2fjtIt+xg6QYvK5HYmYnYOGkz
+NsL0BxQ4jyGpoAG3ctLcv8U1FQ587zVCdBocyEVaOv05DNnpTonpU+3UfPgvvxaB
+Cflgzhsn5rdLhDCOORQstJ/EOBcN1T4HX+tK6uZV97nhV3F+vD7JI5DGz1iuWolY
+dMPm4RnqeK/pfpfTuVgUWYAf+gDPf4SimMK7W0dYvMh5co9Onmi24fV2OlqtfBxx
+zbJGdDJSDA4XrnHfDIp+k65BSlBmwAwwG0fSeeQworiLnX2mk5+4zv4sBkTet42d
+spZN4mTSva3Sx/SQ2HcWoMAMQCjD3JnkrPbidFRHDCzf3ba1PQkwgJ4TXiSqP6au
+Rvfi5vIED4kRzgqXfohrxJ3upn+n55aMeCw+dRhLq9rWM3YOP87ZYt1TTXBHXoT2
+eGgBuwmVpfD4m8RP+QweXOpriPcjg3uKAQLOCW2jwy48rvVp+8LFmm4DJO6wI/EJ
+wDeiUvoJNwIDAQABo0IwQDAdBgNVHQ4EFgQUltcGwjxMWWym3VlTl7QhaxW/KV0w
+EgYDVR0TAQH/BAgwBgEB/wIBADALBgNVHQ8EBAMCAQYwDQYJKoZIhvcNAQEMBQAD
+ggGBAHpHpaLXfpgBB+bHf8FVvT8q+k9CRac44usN0MvCNq7YYpfz6R0IJvJ5ZC6G
+ZrOiMqO5ik+sEjc0k2sP3e+ZwIJR/OfReSwfs9f5M1oYq6pM+nAP10iIpGuvYz7z
+aMcfjHN+7kAAG+9NtxEWWMokApCG23ORz8noKsNSNBUVXvCjgl32E0nviTCOKqEb
+1axDY7QcdUdaHQbOjAtmnvZ6JjZlzAZOGIpvsYVOrtCsb1xC/bdIvntqnB/AYmGT
+vlpuzWa0TfOTx8giT19e1Ka3kWNo++ZpwI0tbYzz/i+n/YERmOz5j5FiqeEkqNWy
+IL0Zln1dMKuC0/zGyYbB3AuFqrXHnRyeBd5dDUetBjQkjwK2yi1VRYHslg85aqBJ
+EU+TF511LR/+Rn+KrcMOfDNHUnyiJcScWNh0HoDCi8iB5ut7Epbu1vxjXlwi2uno
+H5rYf4q11WnDskGogiBUS1URsc7ng3hMQa2K9/a1ezyai0oCMnEDQUvwZHTUft8i
+urSF3Q==
+-----END CERTIFICATE-----`
+  }
 });
 
-
-const createTables = async () => {
-  try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        email TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        full_name TEXT NOT NULL,
-        role TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS tickets (
-        id SERIAL PRIMARY KEY,
-        student_id INTEGER REFERENCES users(id),
-        teacher_id INTEGER REFERENCES users(id),
-        subject VARCHAR(255) NOT NULL,
-        message TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        status VARCHAR(50) DEFAULT 'open',
-        response TEXT,
-        responded_at TIMESTAMP
-      );
-    `);
-
-    console.log("✅ Tables created successfully");
-
-  } catch (err) {
-    console.error("❌ Error creating tables:", err);
-    process.exit(1);
+// Test database connection
+pool.query('SELECT NOW()', (err, result) => {
+  if (err) {
+    console.error('Database connection error:', err);
+  } else {
+    console.log('Database connected successfully');
   }
-};
+});
 
-createTables();
+// The rest of your code remains unchanged
+
 
 // Register endpoint
 app.post('/register', async (req, res) => {
@@ -82,7 +86,6 @@ app.post('/register', async (req, res) => {
 
 // Login endpoint
 app.post('/login', async (req, res) => {
-console.log('🔵 Login attempt:', req.body); // ← הוסיפי את זה
   const { email, password } = req.body;
   try {
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
@@ -149,12 +152,38 @@ app.get('/tickets/:teacherId', async (req, res) => {
        ORDER BY tickets.created_at DESC`,
       [teacherId]
     );
-
+    console.log('Tickets sent to front:', result.rows);
     res.status(200).json(result.rows);
+
   } catch (err) {
     res.status(500).send('Server error');
   }
+   console.log('Tickets sent to front:', result.rows);
 });
+
+// Get all tickets for a specific student with teacher name and response
+app.get('/tickets/:studentId', async (req, res) => {
+  const { studentId } = req.params;
+    try {
+      const result = await pool.query(
+        `SELECT tickets.*, users.full_name AS student_name
+         FROM tickets
+         JOIN users ON tickets.student_id = users.id
+         WHERE tickets.student_id = $1
+         ORDER BY tickets.created_at DESC`,
+        [studentId]
+      );
+      console.log('Tickets sent to front:', result.rows);
+      res.status(200).json(result.rows);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server error');
+  }
+    console.log('Tickets sent to front:', result.rows);
+    res.status(200).json(result.rows);
+});
+
 
 app.put('/tickets/:ticketId/reply', async (req, res) => {
   const { ticketId } = req.params;
@@ -171,6 +200,7 @@ app.put('/tickets/:ticketId/reply', async (req, res) => {
   } catch (err) {
     res.status(500).send('Server error');
   }
+  console.log(`Reply saved for ticket ${ticketId}:`, response);
 });
 
 // Admin endpoints
