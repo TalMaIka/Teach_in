@@ -79,7 +79,6 @@ export default function App() {
             {currentUser.role === 'teacher' && (
              <>
               <Button title="My Tickets" onPress={() => setScreen('ticketList')} disabled={!teacherId} />
-              <Button title="Register" onPress={() => setScreen('register')} />
                </>
             )}
             {currentUser.role === 'admin' && (

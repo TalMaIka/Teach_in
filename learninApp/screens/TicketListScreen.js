@@ -10,21 +10,24 @@ export default function TicketListScreen({ teacherId, studentId, userRole }) {
       try {
         let url;
         if (userRole === 'student') {
-           console.log('student'); // Debugging line
-          url = `http://10.0.2.2:3001/tickets/${studentId}`;
+          url = `http://10.0.2.2:3001/tickets/student/${studentId}`;
         } else if (userRole === 'teacher') {
-          url = `http://10.0.2.2:3001/tickets/${teacherId}`;
+          url = `http://10.0.2.2:3001/tickets/teacher/${teacherId}`;
         } else if (userRole === 'admin') {
           url = `http://10.0.2.2:3001/admin/tickets`;
         }
 
         const res = await fetch(url);
-        const data = await res.json();
 
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+
+        const data = await res.json();
         setTickets(data);
       } catch (err) {
-        Alert.alert('Error', 'Could not load tickets.');
         console.error('Fetch error:', err);
+        Alert.alert('Error', 'Could not load tickets: ' + err.message);
       }
     };
 
@@ -82,7 +85,7 @@ export default function TicketListScreen({ teacherId, studentId, userRole }) {
           <>
             <Text style={styles.info}>To: {item.teacher_name}</Text>
             <Text style={styles.info}>Message: {item.message}</Text>
-            <Text style={styles.status}>Status: {item.status}</Text>
+            <Text style={styles.status}>Status: {item.response ? 'Answered' : 'Pending'}</Text>
           </>
         )}
 
@@ -97,7 +100,7 @@ export default function TicketListScreen({ teacherId, studentId, userRole }) {
           <>
             <Text style={styles.info}>From: {item.student_name} → To: {item.teacher_name}</Text>
             <Text style={styles.info}>Message: {item.message}</Text>
-            <Text style={styles.status}>Status: {item.status}</Text>
+            <Text style={styles.status}>Status: {item.response ? 'Answered' : 'Pending'}</Text>
           </>
         )}
 
@@ -163,17 +166,17 @@ export default function TicketListScreen({ teacherId, studentId, userRole }) {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{getTitle()}</Text>
-      <FlatList
-        data={tickets}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id.toString()}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>{getEmptyMessage()}</Text>
-          </View>
-        }
-        showsVerticalScrollIndicator={false}
-      />
+
+      {tickets.length === 0 ? (
+        <Text style={styles.emptyMessage}>{getEmptyMessage()}</Text>
+      ) : (
+        <FlatList
+          data={tickets}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderItem}
+          style={styles.list}
+        />
+      )}
     </View>
   );
 }
@@ -182,22 +185,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    backgroundColor: '#f5f5f5'
+    backgroundColor: '#f8f9fa',
   },
   title: {
     fontSize: 24,
-    marginBottom: 20,
-    textAlign: 'center',
     fontWeight: 'bold',
-    color: '#333'
+    textAlign: 'center',
+    marginBottom: 20,
+    color: '#2c3e50',
+  },
+  list: {
+    flex: 1,
   },
   ticket: {
+    backgroundColor: 'white',
     padding: 15,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    marginBottom: 15,
-    backgroundColor: '#ffffff',
+    marginBottom: 10,
+    borderRadius: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -205,73 +209,62 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   subject: {
-    fontWeight: 'bold',
     fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2c3e50',
     marginBottom: 8,
-    color: '#2c3e50'
   },
   info: {
     fontSize: 14,
+    color: '#34495e',
     marginBottom: 4,
-    color: '#34495e'
+  },
+  status: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#e67e22',
+    marginBottom: 8,
   },
   date: {
     fontSize: 12,
     color: '#7f8c8d',
-    marginTop: 8,
-    fontStyle: 'italic'
-  },
-  status: {
-    fontSize: 14,
-    color: '#3498db',
-    fontWeight: 'bold',
-    marginTop: 4
+    marginBottom: 8,
   },
   responseLabel: {
+    fontSize: 14,
     fontWeight: 'bold',
-    marginTop: 12,
-    marginBottom: 6,
     color: '#27ae60',
-    fontSize: 16
+    marginTop: 10,
+    marginBottom: 5,
   },
   response: {
-    marginTop: 5,
-    padding: 12,
-    backgroundColor: '#e8f8f5',
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#27ae60',
-    color: '#2c3e50'
+    fontSize: 14,
+    color: '#2c3e50',
+    backgroundColor: '#e8f5e8',
+    padding: 10,
+    borderRadius: 5,
+    marginBottom: 8,
   },
   waiting: {
-    marginTop: 12,
+    fontSize: 14,
+    color: '#e67e22',
     fontStyle: 'italic',
-    color: '#f39c12',
-    textAlign: 'center',
-    fontSize: 14
+    marginTop: 10,
   },
   input: {
     borderWidth: 1,
     borderColor: '#bdc3c7',
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 12,
+    borderRadius: 5,
+    padding: 10,
+    marginTop: 10,
     marginBottom: 10,
-    backgroundColor: '#ffffff',
-    fontSize: 14,
     minHeight: 80,
-    textAlignVertical: 'top'
+    textAlignVertical: 'top',
   },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: 50
-  },
-  emptyText: {
+  emptyMessage: {
+    textAlign: 'center',
     fontSize: 16,
     color: '#7f8c8d',
-    textAlign: 'center',
-    fontStyle: 'italic'
-  }
+    marginTop: 50,
+  },
 });

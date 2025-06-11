@@ -140,7 +140,10 @@ app.get('/teachers', async (req, res) => {
   }
 });
 
-app.get('/tickets/:teacherId', async (req, res) => {
+// Remove the old conflicting routes and replace them with these:
+
+// Get tickets for teachers (teacher viewing tickets sent to them)
+app.get('/tickets/teacher/:teacherId', async (req, res) => {
   const { teacherId } = req.params;
 
   try {
@@ -152,38 +155,36 @@ app.get('/tickets/:teacherId', async (req, res) => {
        ORDER BY tickets.created_at DESC`,
       [teacherId]
     );
-    console.log('Tickets sent to front:', result.rows);
+    console.log('Teacher tickets sent to front:', result.rows);
     res.status(200).json(result.rows);
 
   } catch (err) {
+    console.error('Error fetching teacher tickets:', err);
     res.status(500).send('Server error');
   }
-   console.log('Tickets sent to front:', result.rows);
 });
 
-// Get all tickets for a specific student with teacher name and response
-app.get('/tickets/:studentId', async (req, res) => {
+// Get tickets for students (student viewing their own tickets)
+app.get('/tickets/student/:studentId', async (req, res) => {
   const { studentId } = req.params;
-    try {
-      const result = await pool.query(
-        `SELECT tickets.*, users.full_name AS student_name
-         FROM tickets
-         JOIN users ON tickets.student_id = users.id
-         WHERE tickets.student_id = $1
-         ORDER BY tickets.created_at DESC`,
-        [studentId]
-      );
-      console.log('Tickets sent to front:', result.rows);
-      res.status(200).json(result.rows);
+
+  try {
+    const result = await pool.query(
+      `SELECT tickets.*, teacher_users.full_name AS teacher_name
+       FROM tickets
+       JOIN users AS teacher_users ON tickets.teacher_id = teacher_users.id
+       WHERE tickets.student_id = $1
+       ORDER BY tickets.created_at DESC`,
+      [studentId]
+    );
+    console.log('Student tickets sent to front:', result.rows);
+    res.status(200).json(result.rows);
 
   } catch (err) {
-    console.error(err);
+    console.error('Error fetching student tickets:', err);
     res.status(500).send('Server error');
   }
-    console.log('Tickets sent to front:', result.rows);
-    res.status(200).json(result.rows);
 });
-
 
 app.put('/tickets/:ticketId/reply', async (req, res) => {
   const { ticketId } = req.params;
