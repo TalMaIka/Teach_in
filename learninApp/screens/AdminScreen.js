@@ -1,12 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Button, Alert, ScrollView } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 
 export default function AdminScreen({ adminId }) {
   const [users, setUsers] = useState([]);
   const [tickets, setTickets] = useState([]);
-  const [userRoleFilter, setUserRoleFilter] = useState('');
-  const [ticketStatusFilter, setTicketStatusFilter] = useState('');
 
   useEffect(() => {
     fetchUsers();
@@ -64,22 +61,6 @@ export default function AdminScreen({ adminId }) {
     );
   };
 
-  // Filtering logic
-  const filteredUsers = userRoleFilter
-    ? users.filter(u => u.role === userRoleFilter)
-    : users;
-
-  const filteredTickets = ticketStatusFilter
-    ? tickets.filter(t => {
-        if (ticketStatusFilter === 'pending') {
-          return !t.response;
-        } else if (ticketStatusFilter === 'answered') {
-          return !!t.response;
-        }
-        return true;
-      })
-    : tickets;
-
   return (
     <ScrollView style={{ flex: 1 }}>
       <View style={{ padding: 20 }}>
@@ -96,25 +77,8 @@ export default function AdminScreen({ adminId }) {
         <Text>Teachers: {users.filter(u => u.role === 'teacher').length}</Text>
         <Text>Admins: {users.filter(u => u.role === 'admin').length}</Text>
 
-        {/* User Role Filter */}
-        <Text style={{ fontSize: 16, marginTop: 20 }}>Filter Users by Role:</Text>
-        <View style={{ backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#ccc', marginBottom: 10 }}>
-          <Picker
-            selectedValue={userRoleFilter}
-            onValueChange={setUserRoleFilter}
-            style={{ width: '100%' }}
-          >
-            <Picker.Item label="All Roles" value="" />
-            <Picker.Item label="Student" value="student" />
-            <Picker.Item label="Teacher" value="teacher" />
-            <Picker.Item label="Admin" value="admin" />
-          </Picker>
-        </View>
-
-        <Text style={{ fontSize: 18, marginTop: 10, marginBottom: 10 }}>
           Users:
         </Text>
-        {filteredUsers.slice(0, 10).map((user) => (
           <View key={user.id} style={{
             flexDirection: 'row',
             justifyContent: 'space-between',
@@ -135,24 +99,8 @@ export default function AdminScreen({ adminId }) {
           </View>
         ))}
 
-        {/* Ticket Status Filter */}
-        <Text style={{ fontSize: 16, marginTop: 20 }}>Filter Tickets by Status:</Text>
-        <View style={{ backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#ccc', marginBottom: 10 }}>
-          <Picker
-            selectedValue={ticketStatusFilter}
-            onValueChange={setTicketStatusFilter}
-            style={{ width: '100%' }}
-          >
-            <Picker.Item label="All Statuses" value="" />
-            <Picker.Item label="Pending" value="pending" />
-            <Picker.Item label="Answered" value="answered" />
-          </Picker>
-        </View>
-
-        <Text style={{ fontSize: 18, marginTop: 10, marginBottom: 10 }}>
           Recent Tickets:
         </Text>
-        {filteredTickets.slice(0, 10).map((ticket) => (
           <View key={ticket.id} style={{
             padding: 10,
             borderBottomWidth: 1,
@@ -161,7 +109,6 @@ export default function AdminScreen({ adminId }) {
           }}>
             <Text style={{ fontWeight: 'bold' }}>{ticket.subject}</Text>
             <Text>{ticket.student_name} → {ticket.teacher_name}</Text>
-            <Text>Status: {ticket.response ? 'Answered' : 'Pending'}</Text>
           </View>
         ))}
 
