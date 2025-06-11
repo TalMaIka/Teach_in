@@ -1,14 +1,33 @@
+// server.js
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
+const multer = require('multer');
+const path = require('path');
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+
+// Multer setup for file uploads
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-' + file.originalname);
+  }
+});
+const upload = multer({ storage });
+
+app.use('/uploads', express.static(uploadDir));
 
 const pool = new Pool({
   user: 'avnadmin',
@@ -56,22 +75,15 @@ pool.query('SELECT NOW()', (err, result) => {
   }
 });
 
-// The rest of your code remains unchanged
-
-
 // Register endpoint
 app.post('/register', async (req, res) => {
-  // Accept either JSON or URL-encoded form data
   const { email, password, full_name, role } = req.body;
-
   if (!['student', 'teacher', 'admin'].includes(role)) {
     return res.status(400).send('Invalid role');
   }
-
   if (!email || !password || !full_name) {
     return res.status(400).send('Missing fields');
   }
-
   try {
     const hash = await bcrypt.hash(password, 10);
     await pool.query(
@@ -90,11 +102,9 @@ app.post('/login', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
     if (result.rows.length === 0) return res.status(401).send('User not found');
-
     const user = result.rows[0];
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).send('Wrong password');
-
     res.status(200).json({
       message: 'Login successful',
       user: {
@@ -110,18 +120,17 @@ app.post('/login', async (req, res) => {
   }
 });
 
-
-// Ticketing system
-app.post('/tickets', async (req, res) => {
+// Ticketing system with file upload
+app.post('/tickets', upload.single('attachment'), async (req, res) => {
   const { student_id, teacher_id, subject, message } = req.body;
+  const attachment = req.file ? req.file.filename : null;
   if (!student_id || !teacher_id || !subject || !message) {
     return res.status(400).send('Missing fields');
   }
-
   try {
     await pool.query(
-      `INSERT INTO tickets (student_id, teacher_id, subject, message) VALUES ($1, $2, $3, $4)`,
-      [student_id, teacher_id, subject, message]
+      `INSERT INTO tickets (student_id, teacher_id, subject, message, attachment) VALUES ($1, $2, $3, $4, $5)`,
+      [student_id, teacher_id, subject, message, attachment]
     );
     res.status(201).send('Ticket created');
   } catch (err) {
@@ -140,12 +149,9 @@ app.get('/teachers', async (req, res) => {
   }
 });
 
-// Remove the old conflicting routes and replace them with these:
-
-// Get tickets for teachers (teacher viewing tickets sent to them)
+// Get tickets for teachers
 app.get('/tickets/teacher/:teacherId', async (req, res) => {
   const { teacherId } = req.params;
-
   try {
     const result = await pool.query(
       `SELECT tickets.*, users.full_name AS student_name
@@ -155,19 +161,15 @@ app.get('/tickets/teacher/:teacherId', async (req, res) => {
        ORDER BY tickets.created_at DESC`,
       [teacherId]
     );
-    console.log('Teacher tickets sent to front:', result.rows);
     res.status(200).json(result.rows);
-
   } catch (err) {
-    console.error('Error fetching teacher tickets:', err);
     res.status(500).send('Server error');
   }
 });
 
-// Get tickets for students (student viewing their own tickets)
+// Get tickets for students
 app.get('/tickets/student/:studentId', async (req, res) => {
   const { studentId } = req.params;
-
   try {
     const result = await pool.query(
       `SELECT tickets.*, teacher_users.full_name AS teacher_name
@@ -177,11 +179,8 @@ app.get('/tickets/student/:studentId', async (req, res) => {
        ORDER BY tickets.created_at DESC`,
       [studentId]
     );
-    console.log('Student tickets sent to front:', result.rows);
     res.status(200).json(result.rows);
-
   } catch (err) {
-    console.error('Error fetching student tickets:', err);
     res.status(500).send('Server error');
   }
 });
@@ -189,9 +188,7 @@ app.get('/tickets/student/:studentId', async (req, res) => {
 app.put('/tickets/:ticketId/reply', async (req, res) => {
   const { ticketId } = req.params;
   const { response } = req.body;
-
   if (!response) return res.status(400).send('Missing response');
-
   try {
     await pool.query(
       `UPDATE tickets SET response = $1, responded_at = NOW() WHERE id = $2`,
@@ -201,7 +198,137 @@ app.put('/tickets/:ticketId/reply', async (req, res) => {
   } catch (err) {
     res.status(500).send('Server error');
   }
-  console.log(`Reply saved for ticket ${ticketId}:`, response);
+});
+
+// LESSONS FUNCTIONALITY
+
+// Create a lesson (teacher)
+app.post('/lessons', async (req, res) => {
+  const { title, date, time, description, teacher_id } = req.body;
+  if (!title || !date || !time || !teacher_id) {
+    return res.status(400).send('Missing fields');
+  }
+  try {
+    await pool.query(
+      `INSERT INTO lessons (title, date, time, description, teacher_id) VALUES ($1, $2, $3, $4, $5)`,
+      [title, date, time, description, teacher_id]
+    );
+    res.status(201).send('Lesson created');
+  } catch (err) {
+    res.status(500).send('Server error');
+  }
+});
+
+// List all lessons
+app.get('/lessons', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT lessons.*, users.full_name AS teacher_name
+       FROM lessons
+       JOIN users ON lessons.teacher_id = users.id
+       ORDER BY date ASC, time ASC`
+    );
+    // Always return date as YYYY-MM-DD string
+    const lessons = result.rows.map(l => ({
+      ...l,
+      date: l.date instanceof Date
+        ? l.date.toISOString().slice(0, 10)
+        : (typeof l.date === 'string' && l.date.length >= 10
+            ? l.date.slice(0, 10)
+            : l.date)
+    }));
+    res.status(200).json(lessons);
+  } catch (err) {
+    res.status(500).send('Server error');
+  }
+});
+
+// Student sign up for a lesson
+app.post('/lessons/:lessonId/signup', async (req, res) => {
+  const { lessonId } = req.params;
+  const { student_id } = req.body;
+  if (!student_id) return res.status(400).send('Missing student_id');
+  try {
+    // Prevent duplicate signups
+    const exists = await pool.query(
+      `SELECT * FROM lesson_signups WHERE lesson_id = $1 AND student_id = $2`,
+      [lessonId, student_id]
+    );
+    if (exists.rows.length > 0) {
+      return res.status(400).send('Already signed up');
+    }
+    await pool.query(
+      `INSERT INTO lesson_signups (lesson_id, student_id) VALUES ($1, $2)`,
+      [lessonId, student_id]
+    );
+    res.status(201).send('Signed up for lesson');
+  } catch (err) {
+    res.status(500).send('Server error');
+  }
+});
+
+// --- Unsign endpoint ---
+app.delete('/lessons/:lessonId/unsign', async (req, res) => {
+  const { lessonId } = req.params;
+  const { student_id } = req.body;
+  if (!student_id) return res.status(400).send('Missing student_id');
+  try {
+    const result = await pool.query(
+      `DELETE FROM lesson_signups WHERE lesson_id = $1 AND student_id = $2`,
+      [lessonId, student_id]
+    );
+    if (result.rowCount === 0) {
+      return res.status(404).send('Not signed up for this lesson');
+    }
+    res.status(200).send('Unregistered from lesson');
+  } catch (err) {
+    res.status(500).send('Server error');
+  }
+});
+
+// Get students signed up for a lesson
+app.get('/lessons/:lessonId/students', async (req, res) => {
+  const { lessonId } = req.params;
+  try {
+    const result = await pool.query(
+      `SELECT users.id, users.full_name, users.email
+       FROM lesson_signups
+       JOIN users ON lesson_signups.student_id = users.id
+       WHERE lesson_signups.lesson_id = $1`,
+      [lessonId]
+    );
+    res.status(200).json(result.rows);
+  } catch (err) {
+    res.status(500).send('Server error');
+  }
+});
+
+// Get lessons a student is signed up for
+app.get('/students/:studentId/lessons', async (req, res) => {
+  const { studentId } = req.params;
+  try {
+    const result = await pool.query(
+      `SELECT lessons.*, users.full_name AS teacher_name
+       FROM lesson_signups
+       JOIN lessons ON lesson_signups.lesson_id = lessons.id
+       JOIN users ON lessons.teacher_id = users.id
+       WHERE lesson_signups.student_id = $1
+       ORDER BY lessons.date ASC, lessons.time ASC`,
+      [studentId]
+    );
+    // Ensure date is in YYYY-MM-DD format
+    const lessons = result.rows.map(l => ({
+      ...l,
+      date: l.date instanceof Date
+        ? l.date.toISOString().slice(0, 10)
+        : (typeof l.date === 'string' && l.date.length >= 10
+            ? l.date.slice(0, 10)
+            : l.date)
+    }));
+    res.status(200).json(lessons);
+  } catch (err) {
+    res.status(500).send('Server error');
+  }
 });
 
 // Admin endpoints
@@ -238,6 +365,8 @@ app.delete('/admin/users/:userId', async (req, res) => {
   const { userId } = req.params;
   try {
     await pool.query('DELETE FROM tickets WHERE student_id = $1 OR teacher_id = $1', [userId]);
+    await pool.query('DELETE FROM lesson_signups WHERE student_id = $1', [userId]);
+    await pool.query('DELETE FROM lessons WHERE teacher_id = $1', [userId]);
     await pool.query('DELETE FROM users WHERE id = $1', [userId]);
     res.status(200).send('User deleted successfully');
   } catch (err) {

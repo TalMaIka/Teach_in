@@ -77,10 +77,8 @@ export default function AdminScreen({ adminId }) {
         <Text>Teachers: {users.filter(u => u.role === 'teacher').length}</Text>
         <Text>Admins: {users.filter(u => u.role === 'admin').length}</Text>
 
-        <Text style={{ fontSize: 18, marginTop: 20, marginBottom: 10 }}>
           Users:
         </Text>
-        {users.slice(0, 10).map((user) => (
           <View key={user.id} style={{
             flexDirection: 'row',
             justifyContent: 'space-between',
@@ -101,10 +99,8 @@ export default function AdminScreen({ adminId }) {
           </View>
         ))}
 
-        <Text style={{ fontSize: 18, marginTop: 20, marginBottom: 10 }}>
           Recent Tickets:
         </Text>
-        {tickets.slice(0, 10).map((ticket) => (
           <View key={ticket.id} style={{
             padding: 10,
             borderBottomWidth: 1,
@@ -113,7 +109,6 @@ export default function AdminScreen({ adminId }) {
           }}>
             <Text style={{ fontWeight: 'bold' }}>{ticket.subject}</Text>
             <Text>{ticket.student_name} → {ticket.teacher_name}</Text>
-            <Text>Status: {ticket.status}</Text>
           </View>
         ))}
 
