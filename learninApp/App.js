@@ -142,8 +142,6 @@ export default function App() {
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around', padding: 20 }}>
         {!currentUser ? (
           <>
-            <Button title="Register" onPress={() => setScreen('register')} />
-            <Button title="Login" onPress={() => setScreen('login')} />
           </>
         ) : (
           <>
