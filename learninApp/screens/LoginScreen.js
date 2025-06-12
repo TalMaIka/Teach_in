@@ -22,7 +22,7 @@ export default function LoginScreen({ onLoginSuccess }) {
         setPassword('');
 
         if (onLoginSuccess) {
-          onLoginSuccess(data.user); // On envoie l'objet complet (id, role, etc.)
+          onLoginSuccess(data.user);
         }
       } else {
         const errorText = await res.text();

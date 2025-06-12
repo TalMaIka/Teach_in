@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
-import { Picker } from '@react-native-picker/picker'; // 🟩 Ajoute la dépendance si besoin : npm install @react-native-picker/picker
+import { View, Text, TextInput, Button, StyleSheet, Alert, Image } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 
 export default function TicketScreen({ studentId }) {
   const [teachers, setTeachers] = useState([]);
   const [teacherId, setTeacherId] = useState('');
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
+  const [attachment, setAttachment] = useState(null);
 
   useEffect(() => {
-    // Charge la liste des professeurs dès que l'écran s'affiche
     const fetchTeachers = async () => {
       try {
         const res = await fetch('http://10.0.2.2:3001/teachers');
@@ -19,9 +20,24 @@ export default function TicketScreen({ studentId }) {
         Alert.alert('Error', 'Could not load teachers');
       }
     };
-
     fetchTeachers();
   }, []);
+
+  const pickImage = () => {
+    launchImageLibrary({ mediaType: 'photo' }, (response) => {
+      if (!response.didCancel && !response.errorCode && response.assets && response.assets.length > 0) {
+        setAttachment(response.assets[0]);
+      }
+    });
+  };
+
+  const takePhoto = () => {
+    launchCamera({ mediaType: 'photo' }, (response) => {
+      if (!response.didCancel && !response.errorCode && response.assets && response.assets.length > 0) {
+        setAttachment(response.assets[0]);
+      }
+    });
+  };
 
   const sendTicket = async () => {
     if (!teacherId || !subject || !message) {
@@ -29,16 +45,24 @@ export default function TicketScreen({ studentId }) {
       return;
     }
 
+    const formData = new FormData();
+    formData.append('student_id', studentId);
+    formData.append('teacher_id', teacherId);
+    formData.append('subject', subject);
+    formData.append('message', message);
+    if (attachment) {
+      formData.append('attachment', {
+        uri: attachment.uri,
+        type: attachment.type,
+        name: attachment.fileName || 'photo.jpg',
+      });
+    }
+
     try {
       const res = await fetch('http://10.0.2.2:3001/tickets', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          student_id: studentId, // 🟩 L'ID réel de l'étudiant connecté
-          teacher_id: teacherId,
-          subject,
-          message,
-        }),
+        body: formData,
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
 
       if (res.ok) {
@@ -46,6 +70,7 @@ export default function TicketScreen({ studentId }) {
         setTeacherId('');
         setSubject('');
         setMessage('');
+        setAttachment(null);
       } else {
         const errorText = await res.text();
         Alert.alert('Error', errorText);
@@ -85,6 +110,18 @@ export default function TicketScreen({ studentId }) {
         onChangeText={setMessage}
         multiline
       />
+
+      <View style={{ flexDirection: 'row', marginBottom: 15 }}>
+        <Button title="Pick Image" onPress={pickImage} />
+        <View style={{ width: 10 }} />
+        <Button title="Take Photo" onPress={takePhoto} />
+      </View>
+      {attachment && (
+        <Image
+          source={{ uri: attachment.uri }}
+          style={{ width: 100, height: 100, marginBottom: 15, borderRadius: 8 }}
+        />
+      )}
 
       <Button title="Send Ticket" onPress={sendTicket} />
     </View>
