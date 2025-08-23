@@ -10,7 +10,7 @@ import {
   ScrollView,
 } from 'react-native';
 
-// Screens (inchangés)
+// Screens
 import RegisterScreen from './screens/RegisterScreen';
 import LoginScreen from './screens/LoginScreen';
 import TicketScreen from './screens/TicketScreen';
@@ -21,11 +21,11 @@ import StudentCalendarScreen from './screens/StudentCalendarScreen';
 import TeacherLessonScreen from './screens/TeacherLessonScreen';
 
 /**
- * THEME — palette & constantes centralisées
+ * THEME — palette & constants
  */
 const theme = {
   colors: {
-    bg: '#0F172A', // fond app (sombre chic)
+    bg: '#0F172A', // app background (dark elegant)
     card: '#111827',
     surface: '#0B1220',
     text: '#F3F4F6',
@@ -45,32 +45,32 @@ const theme = {
 };
 
 /**
- * Banner (toast haut) — composant réutilisable
+ * Banner (top toast) — reusable component
  */
 function Banner({ visible, message, anim }) {
   if (!visible) return null;
   return (
-      <Animated.View style={[styles.banner, { transform: [{ translateY: anim }] }]}>
-        <Text style={styles.bannerTitle}>Aujourd'hui</Text>
-        <Text style={styles.bannerText}>{message}</Text>
-      </Animated.View>
+    <Animated.View style={[styles.banner, { transform: [{ translateY: anim }] }]}>
+      <Text style={styles.bannerTitle}>Today</Text>
+      <Text style={styles.bannerText}>{message}</Text>
+    </Animated.View>
   );
 }
 
 /**
- * ActionButton — carte cliquable moderne pour les actions principales
+ * ActionButton — modern clickable card for main actions
  */
 function ActionButton({ label, icon, onPress, disabled }) {
   return (
-      <TouchableOpacity
-          onPress={onPress}
-          disabled={disabled}
-          style={[styles.actionBtn, disabled && { opacity: 0.5 }]}
-          activeOpacity={0.8}
-      >
-        <View style={styles.actionIcon}>{icon}</View>
-        <Text style={styles.actionLabel}>{label}</Text>
-      </TouchableOpacity>
+    <TouchableOpacity
+      onPress={onPress}
+      disabled={disabled}
+      style={[styles.actionBtn, disabled && { opacity: 0.5 }]}
+      activeOpacity={0.8}
+    >
+      <View style={styles.actionIcon}>{icon}</View>
+      <Text style={styles.actionLabel}>{label}</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -104,7 +104,7 @@ export default function App() {
     });
   };
 
-  // Notif cours du jour (même logique, message formaté)
+  // Notify today's lessons for student
   const notifyStudentTodaysLessons = async (sid) => {
     try {
       const res = await fetch(`http://10.0.2.2:3001/students/${sid}/lessons`);
@@ -115,30 +115,30 @@ export default function App() {
         if (todays.length > 0) {
           const now = new Date();
           const msg = todays
-              .map((l) => {
-                const [hour, min] = (l.time || '00:00').split(':').map(Number);
-                const lessonDate = new Date(`${l.date}T${l.time || '00:00'}:00`);
-                const diffMs = lessonDate - now;
-                let timeInfo = '';
-                if (diffMs > 0) {
-                  const diffMin = Math.floor(diffMs / 60000);
-                  const hours = Math.floor(diffMin / 60);
-                  const mins = diffMin % 60;
-                  timeInfo = `dans ${hours > 0 ? hours + 'h ' : ''}${mins}m`;
-                } else {
-                  timeInfo = 'a déjà commencé';
-                }
-                let details = `• ${l.title || 'Cours'} — ${l.time} (${timeInfo})`;
-                if (l.location) details += `\n  Lieu : ${l.location}`;
-                if (l.teacher) details += `\n  Prof : ${l.teacher}`;
-                return details;
-              })
-              .join('\n\n');
+            .map((l) => {
+              const [hour, min] = (l.time || '00:00').split(':').map(Number);
+              const lessonDate = new Date(`${l.date}T${l.time || '00:00'}:00`);
+              const diffMs = lessonDate - now;
+              let timeInfo = '';
+              if (diffMs > 0) {
+                const diffMin = Math.floor(diffMs / 60000);
+                const hours = Math.floor(diffMin / 60);
+                const mins = diffMin % 60;
+                timeInfo = `in ${hours > 0 ? hours + 'h ' : ''}${mins}m`;
+              } else {
+                timeInfo = 'already started';
+              }
+              let details = `• ${l.title || 'Lesson'} — ${l.time} (${timeInfo})`;
+              if (l.location) details += `\n  Location: ${l.location}`;
+              if (l.teacher) details += `\n  Teacher: ${l.teacher}`;
+              return details;
+            })
+            .join('\n\n');
           showAnimatedBanner(msg);
         }
       }
     } catch (e) {
-      // Silencieux pour l'instant (peut logger)
+      // silent
     }
   };
 
@@ -166,83 +166,83 @@ export default function App() {
   };
 
   /**
-   * Icônes minimalistes (sans lib externe)
+   * Small status dot
    */
   const Dot = () => <View style={styles.dot} />;
 
   return (
-      <SafeAreaView style={styles.safe}>
-        {/* Banner */}
-        <Banner visible={showBanner} message={bannerMessage} anim={bannerAnim} />
+    <SafeAreaView style={styles.safe}>
+      {/* Banner */}
+      <Banner visible={showBanner} message={bannerMessage} anim={bannerAnim} />
 
-        {/* Header */}
-        <View style={styles.header}>
-          <Image source={require('./logo.png')} style={styles.logo} resizeMode="contain" />
-          {currentUser && (
-              <View style={styles.userChip}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Dot />
-                  <Text style={styles.userName}>{currentUser.full_name}</Text>
-                  <Text style={styles.roleBadge}>{currentUser.role}</Text>
-                </View>
-                <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} activeOpacity={0.8}>
-                  <Text style={styles.logoutText}>Logout</Text>
-                </TouchableOpacity>
-              </View>
-          )}
-        </View>
-
-        {/* Body */}
-        <ScrollView contentContainerStyle={styles.body}>
-          {/* Actions */}
-          {currentUser ? (
-              <View style={styles.actionsGrid}>
-                {currentUser.role === 'student' && (
-                    <>
-                      <ActionButton label="Ouvrir un ticket" onPress={() => setScreen('tickets')} icon={<View style={styles.simpleIcon} />} disabled={!studentId} />
-                      <ActionButton label="Mes tickets" onPress={() => setScreen('ticketList')} icon={<View style={styles.simpleIcon} />} disabled={!currentUser} />
-                      <ActionButton label="Mon calendrier" onPress={() => setScreen('calendar')} icon={<View style={styles.simpleIcon} />} disabled={!studentId} />
-                    </>
-                )}
-
-                {currentUser.role === 'teacher' && (
-                    <>
-                      <ActionButton label="Mes cours" onPress={() => setScreen('teacherLessons')} icon={<View style={styles.simpleIcon} />} disabled={!teacherId} />
-                      <ActionButton label="Mes tickets" onPress={() => setScreen('ticketList')} icon={<View style={styles.simpleIcon} />} disabled={!teacherId} />
-                      <ActionButton label="Créer un cours" onPress={() => setScreen('lesson')} icon={<View style={styles.simpleIcon} />} disabled={!teacherId} />
-                    </>
-                )}
-
-                {currentUser.role === 'admin' && (
-                    <ActionButton label="Panneau admin" onPress={() => setScreen('admin')} icon={<View style={styles.simpleIcon} />} disabled={!adminId} />
-                )}
-              </View>
-          ) : (
-              <View style={styles.welcomeCard}>
-                <Text style={styles.welcomeTitle}>Bienvenue 👋</Text>
-                <Text style={styles.welcomeText}>
-                  Connecte-toi pour accéder à tes cours, tickets et planning.
-                </Text>
-              </View>
-          )}
-
-          {/* Screens */}
-          <View style={{ flex: 1, width: '100%' }}>
-            {screen === 'register' && <RegisterScreen />}
-            {screen === 'login' && <LoginScreen onLoginSuccess={handleLoginSuccess} />}
-            {screen === 'tickets' && studentId && <TicketScreen studentId={studentId} />}
-            {screen === 'ticketList' && currentUser && (
-                <TicketListScreen teacherId={teacherId} studentId={studentId} userRole={currentUser.role} />
-            )}
-            {screen === 'admin' && adminId && <AdminScreen adminId={adminId} />}
-            {screen === 'lesson' && teacherId && (
-                <LessonScreen teacherId={teacherId} navigation={{ goBack: () => setScreen('ticketList') }} />
-            )}
-            {screen === 'calendar' && studentId && <StudentCalendarScreen studentId={studentId} />}
-            {screen === 'teacherLessons' && teacherId && <TeacherLessonScreen teacherId={teacherId} />}
+      {/* Header */}
+      <View style={styles.header}>
+        <Image source={require('./logo.png')} style={styles.logo} resizeMode="contain" />
+        {currentUser && (
+          <View style={styles.userChip}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Dot />
+              <Text style={styles.userName}>{currentUser.full_name}</Text>
+              <Text style={styles.roleBadge}>{currentUser.role}</Text>
+            </View>
+            <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} activeOpacity={0.8}>
+              <Text style={styles.logoutText}>Logout</Text>
+            </TouchableOpacity>
           </View>
-        </ScrollView>
-      </SafeAreaView>
+        )}
+      </View>
+
+      {/* Body */}
+      <ScrollView contentContainerStyle={styles.body}>
+        {/* Actions */}
+        {currentUser ? (
+          <View style={styles.actionsGrid}>
+            {currentUser.role === 'student' && (
+              <>
+                <ActionButton label="Open Ticket" onPress={() => setScreen('tickets')} icon={<View style={styles.simpleIcon} />} disabled={!studentId} />
+                <ActionButton label="My Tickets" onPress={() => setScreen('ticketList')} icon={<View style={styles.simpleIcon} />} disabled={!currentUser} />
+                <ActionButton label="My Calendar" onPress={() => setScreen('calendar')} icon={<View style={styles.simpleIcon} />} disabled={!studentId} />
+              </>
+            )}
+
+            {currentUser.role === 'teacher' && (
+              <>
+                <ActionButton label="My Lessons" onPress={() => setScreen('teacherLessons')} icon={<View style={styles.simpleIcon} />} disabled={!teacherId} />
+                <ActionButton label="My Tickets" onPress={() => setScreen('ticketList')} icon={<View style={styles.simpleIcon} />} disabled={!teacherId} />
+                <ActionButton label="Create Lesson" onPress={() => setScreen('lesson')} icon={<View style={styles.simpleIcon} />} disabled={!teacherId} />
+              </>
+            )}
+
+            {currentUser.role === 'admin' && (
+              <ActionButton label="Admin Panel" onPress={() => setScreen('admin')} icon={<View style={styles.simpleIcon} />} disabled={!adminId} />
+            )}
+          </View>
+        ) : (
+          <View style={styles.welcomeCard}>
+            <Text style={styles.welcomeTitle}>Welcome 👋</Text>
+            <Text style={styles.welcomeText}>
+              Log in to access your lessons, tickets, and schedule.
+            </Text>
+          </View>
+        )}
+
+        {/* Screens */}
+        <View style={{ flex: 1, width: '100%' }}>
+          {screen === 'register' && <RegisterScreen />}
+          {screen === 'login' && <LoginScreen onLoginSuccess={handleLoginSuccess} />}
+          {screen === 'tickets' && studentId && <TicketScreen studentId={studentId} />}
+          {screen === 'ticketList' && currentUser && (
+            <TicketListScreen teacherId={teacherId} studentId={studentId} userRole={currentUser.role} />
+          )}
+          {screen === 'admin' && adminId && <AdminScreen adminId={adminId} />}
+          {screen === 'lesson' && teacherId && (
+            <LessonScreen teacherId={teacherId} navigation={{ goBack: () => setScreen('ticketList') }} />
+          )}
+          {screen === 'calendar' && studentId && <StudentCalendarScreen studentId={studentId} />}
+          {screen === 'teacherLessons' && teacherId && <TeacherLessonScreen teacherId={teacherId} />}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
