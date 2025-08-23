@@ -19,6 +19,7 @@ import AdminScreen from './screens/AdminScreen';
 import LessonScreen from './screens/LessonScreen';
 import StudentCalendarScreen from './screens/StudentCalendarScreen';
 import TeacherLessonScreen from './screens/TeacherLessonScreen';
+import AttendanceScreen from './screens/AttendanceScreen'; // <-- NEW
 
 /**
  * THEME — palette & constants
@@ -165,9 +166,7 @@ export default function App() {
     setScreen('login');
   };
 
-  /**
-   * Small status dot
-   */
+  /** Small status dot */
   const Dot = () => <View style={styles.dot} />;
 
   return (
@@ -210,11 +209,15 @@ export default function App() {
                 <ActionButton label="My Lessons" onPress={() => setScreen('teacherLessons')} icon={<View style={styles.simpleIcon} />} disabled={!teacherId} />
                 <ActionButton label="My Tickets" onPress={() => setScreen('ticketList')} icon={<View style={styles.simpleIcon} />} disabled={!teacherId} />
                 <ActionButton label="Create Lesson" onPress={() => setScreen('lesson')} icon={<View style={styles.simpleIcon} />} disabled={!teacherId} />
+                <ActionButton label="Attendance" onPress={() => setScreen('attendance')} icon={<View style={styles.simpleIcon} />} disabled={!teacherId} />
               </>
             )}
 
             {currentUser.role === 'admin' && (
-              <ActionButton label="Admin Panel" onPress={() => setScreen('admin')} icon={<View style={styles.simpleIcon} />} disabled={!adminId} />
+              <>
+                <ActionButton label="Admin Panel" onPress={() => setScreen('admin')} icon={<View style={styles.simpleIcon} />} disabled={!adminId} />
+                <ActionButton label="Attendance" onPress={() => setScreen('attendance')} icon={<View style={styles.simpleIcon} />} disabled={!adminId} />
+              </>
             )}
           </View>
         ) : (
@@ -240,6 +243,9 @@ export default function App() {
           )}
           {screen === 'calendar' && studentId && <StudentCalendarScreen studentId={studentId} />}
           {screen === 'teacherLessons' && teacherId && <TeacherLessonScreen teacherId={teacherId} />}
+          {screen === 'attendance' && currentUser && (
+            <AttendanceScreen userRole={currentUser.role} teacherId={teacherId} />
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -258,9 +264,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   logo: {
-    width: '60%',
+    width: '85%',
     alignSelf: 'center',
-    height: 48,
+    height: 185,
   },
   userChip: {
     backgroundColor: theme.colors.card,
