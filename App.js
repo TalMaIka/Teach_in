@@ -7,7 +7,6 @@ import {
   StyleSheet,
   Animated,
   Image,
-  // ❌ ScrollView removed
 } from 'react-native';
 
 // Screens
@@ -19,6 +18,7 @@ import AdminScreen from './screens/AdminScreen';
 import LessonScreen from './screens/LessonScreen';
 import StudentCalendarScreen from './screens/StudentCalendarScreen';
 import TeacherLessonScreen from './screens/TeacherLessonScreen';
+import AttendanceScreen from './screens/AttendanceScreen';
 
 /**
  * THEME — palette & constants
@@ -39,13 +39,11 @@ const theme = {
   },
   radius: 16,
   gap: 16,
-  h: {
-    touch: 56,
-  },
+  h: { touch: 56 },
 };
 
 /**
- * Banner (top toast) — reusable component
+ * Banner (top toast)
  */
 function Banner({ visible, message, anim }) {
   if (!visible) return null;
@@ -165,9 +163,6 @@ export default function App() {
     setScreen('login');
   };
 
-  /**
-   * Small status dot
-   */
   const Dot = () => <View style={styles.dot} />;
 
   return (
@@ -192,9 +187,9 @@ export default function App() {
           )}
         </View>
 
-        {/* Body (NO ScrollView here) */}
+        {/* Body (no ScrollView here) */}
         <View style={styles.body}>
-          {/* Actions */}
+          {/* Quick actions */}
           {currentUser ? (
               <View style={styles.actionsGrid}>
                 {currentUser.role === 'student' && (
@@ -240,16 +235,30 @@ export default function App() {
                           icon={<View style={styles.simpleIcon} />}
                           disabled={!teacherId}
                       />
+                      <ActionButton
+                          label="Attendance"
+                          onPress={() => setScreen('attendance')}
+                          icon={<View style={styles.simpleIcon} />}
+                          disabled={!teacherId}
+                      />
                     </>
                 )}
 
                 {currentUser.role === 'admin' && (
-                    <ActionButton
-                        label="Admin Panel"
-                        onPress={() => setScreen('admin')}
-                        icon={<View style={styles.simpleIcon} />}
-                        disabled={!adminId}
-                    />
+                    <>
+                      <ActionButton
+                          label="Admin Panel"
+                          onPress={() => setScreen('admin')}
+                          icon={<View style={styles.simpleIcon} />}
+                          disabled={!adminId}
+                      />
+                      <ActionButton
+                          label="Attendance"
+                          onPress={() => setScreen('attendance')}
+                          icon={<View style={styles.simpleIcon} />}
+                          disabled={!adminId}
+                      />
+                    </>
                 )}
               </View>
           ) : (
@@ -280,11 +289,11 @@ export default function App() {
                     navigation={{ goBack: () => setScreen('ticketList') }}
                 />
             )}
-            {screen === 'calendar' && studentId && (
-                <StudentCalendarScreen studentId={studentId} />
-            )}
-            {screen === 'teacherLessons' && teacherId && (
-                <TeacherLessonScreen teacherId={teacherId} />
+            {screen === 'calendar' && studentId && <StudentCalendarScreen studentId={studentId} />}
+            {screen === 'teacherLessons' && teacherId && <TeacherLessonScreen teacherId={teacherId} />}
+
+            {screen === 'attendance' && currentUser && (
+                <AttendanceScreen userRole={currentUser.role} teacherId={teacherId} />
             )}
           </View>
         </View>
