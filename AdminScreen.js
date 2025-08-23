@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,12 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Modal,
+  FlatList,
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+// import { Picker } from '@react-native-picker/picker'  // ← plus utilisé
 
-/** Theme local (assorti à App.js) */
+/** Theme (aligné sur App.js) */
 const theme = {
   colors: {
     bg: '#0F172A',
@@ -27,6 +29,20 @@ const theme = {
   gap: 16,
 };
 
+/* ---------- Small UI helpers ---------- */
+function Row({ children, style }) {
+  return <View style={[styles.row, style]}>{children}</View>;
+}
+function Card({ children, style }) {
+  return <View style={[styles.card, style]}>{children}</View>;
+}
+function Chip({ label }) {
+  return (
+    <View style={styles.chip}>
+      <Text style={styles.chipText}>{label}</Text>
+    </View>
+  );
+}
 function Stat({ label, value, tone = 'default' }) {
   const toneBg = {
     default: theme.colors.card,
@@ -41,32 +57,67 @@ function Stat({ label, value, tone = 'default' }) {
     warn: theme.colors.warn,
   }[tone] || theme.colors.text;
   return (
-      <View style={[styles.stat, { backgroundColor: toneBg }]}>
-        <Text style={styles.statLabel}>{label}</Text>
-        <Text style={[styles.statValue, { color: toneValue }]}>{value}</Text>
-      </View>
+    <View style={[styles.stat, { backgroundColor: toneBg }]}>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={[styles.statValue, { color: toneValue }]}>{value}</Text>
+    </View>
   );
 }
 
-function Card({ children, style }) {
+/* ---------- ThemedSelect (remplace Picker) ---------- */
+function ThemedSelect({ value, onChange, options, placeholder = 'Select…' }) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find(o => o.value === value);
+
   return (
-      <View style={[styles.card, style]}>
-        {children}
-      </View>
+    <>
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => setOpen(true)}
+        style={styles.selectTrigger}
+      >
+        <Text style={[styles.selectText, { color: selected ? theme.colors.text : theme.colors.textMuted }]}>
+          {selected ? selected.label : placeholder}
+        </Text>
+        <Text style={styles.selectChevron}>▾</Text>
+      </TouchableOpacity>
+
+      <Modal visible={open} animationType="fade" transparent onRequestClose={() => setOpen(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>{placeholder}</Text>
+            <FlatList
+              data={options}
+              keyExtractor={(o) => String(o.value)}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.optionRow,
+                    value === item.value && { backgroundColor: '#0F2A5A44', borderColor: '#3B82F6' },
+                  ]}
+                  onPress={() => {
+                    onChange(item.value);
+                    setOpen(false);
+                  }}
+                >
+                  <Text style={styles.optionText}>{item.label}</Text>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={<Text style={styles.empty}>No options</Text>}
+            />
+            <TouchableOpacity style={styles.modalClose} onPress={() => setOpen(false)} activeOpacity={0.85}>
+              <Text style={styles.modalCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
-function Chip({ label }) {
-  return (
-      <View style={styles.chip}><Text style={styles.chipText}>{label}</Text></View>
-  );
-}
-
-function Row({ children }) {
-  return <View style={styles.row}>{children}</View>;
-}
-
+/* ===================== AdminScreen ===================== */
 export default function AdminScreen({ adminId }) {
+  const [tab, setTab] = useState('dashboard'); // 'dashboard' | 'users' | 'tickets'
   const [users, setUsers] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [userRoleFilter, setUserRoleFilter] = useState('');
@@ -76,15 +127,14 @@ export default function AdminScreen({ adminId }) {
 
   useEffect(() => {
     let mounted = true;
-    const run = async () => {
+    (async () => {
       try {
         setLoading(true);
         await Promise.all([fetchUsers(), fetchAllTickets()]);
       } finally {
         if (mounted) setLoading(false);
       }
-    };
-    run();
+    })();
     return () => { mounted = false; };
   }, []);
 
@@ -116,9 +166,7 @@ export default function AdminScreen({ adminId }) {
     try {
       setBusyDelete(userId);
       const response = await fetch(`http://10.0.2.2:3001/admin/users/${userId}`, { method: 'DELETE' });
-      if (response.ok) {
-        await fetchUsers();
-      }
+      if (response.ok) await fetchUsers();
     } catch (error) {
       console.error('Failed to delete user');
     } finally {
@@ -126,17 +174,16 @@ export default function AdminScreen({ adminId }) {
     }
   };
 
-  const filteredUsers = useMemo(() => (
-      userRoleFilter ? users.filter(u => u.role === userRoleFilter) : users
-  ), [users, userRoleFilter]);
-
-  const filteredTickets = useMemo(() => (
-      ticketStatusFilter ? tickets.filter(t => {
-        if (ticketStatusFilter === 'pending') return !t.response;
-        if (ticketStatusFilter === 'answered') return !!t.response;
-        return true;
-      }) : tickets
-  ), [tickets, ticketStatusFilter]);
+  const filteredUsers = useMemo(
+    () => (userRoleFilter ? users.filter(u => u.role === userRoleFilter) : users),
+    [users, userRoleFilter]
+  );
+  const filteredTickets = useMemo(
+    () => (ticketStatusFilter
+      ? tickets.filter(t => (ticketStatusFilter === 'pending' ? !t.response : !!t.response))
+      : tickets),
+    [tickets, ticketStatusFilter]
+  );
 
   const stats = useMemo(() => {
     const total = users.length;
@@ -151,219 +198,220 @@ export default function AdminScreen({ adminId }) {
 
   if (loading) {
     return (
-        <View style={[styles.safe, { alignItems: 'center', justifyContent: 'center' }]}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-          <Text style={{ color: theme.colors.textMuted, marginTop: 12 }}>Chargement du tableau de bord…</Text>
-        </View>
+      <View style={[styles.safe, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={{ color: theme.colors.textMuted, marginTop: 12 }}>Loading admin data…</Text>
+      </View>
     );
   }
 
   return (
-      <ScrollView style={styles.safe} contentContainerStyle={{ padding: theme.gap }}>
-        <Text style={styles.title}>Admin Panel</Text>
+    <ScrollView style={styles.safe} contentContainerStyle={{ padding: theme.gap }}>
+      {/* Top Tabs */}
+      <Row style={{ marginBottom: theme.gap }}>
+        <TouchableOpacity
+          style={[styles.tab, tab === 'dashboard' && styles.tabActive]}
+          onPress={() => setTab('dashboard')}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.tabText, tab === 'dashboard' && styles.tabTextActive]}>Admin Panel</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, tab === 'users' && styles.tabActive]}
+          onPress={() => setTab('users')}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.tabText, tab === 'users' && styles.tabTextActive]}>Users</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, tab === 'tickets' && styles.tabActive]}
+          onPress={() => setTab('tickets')}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.tabText, tab === 'tickets' && styles.tabTextActive]}>Recent Tickets</Text>
+        </TouchableOpacity>
+      </Row>
 
-        {/* Stats */}
-        <Row>
-          <Stat label="Utilisateurs" value={stats.total} tone="primary" />
-          <Stat label="Tickets" value={stats.totalTickets} tone="primary" />
-        </Row>
-        <Row>
-          <Stat label="Students" value={stats.students} tone="default" />
-          <Stat label="Teachers" value={stats.teachers} tone="default" />
-        </Row>
-        <Row>
-          <Stat label="Admins" value={stats.admins} tone="default" />
-          <Stat label="En attente" value={stats.pending} tone="warn" />
-        </Row>
-        <Row>
-          <Stat label="Répondus" value={stats.answered} tone="success" />
-          <View style={{ flex: 1 }} />
-        </Row>
+      {tab === 'dashboard' && (
+        <>
+          <Text style={styles.title}>Admin Panel</Text>
+          <Row>
+            <Stat label="Users" value={stats.total} tone="primary" />
+            <Stat label="Tickets" value={stats.totalTickets} tone="primary" />
+          </Row>
+          <Row>
+            <Stat label="Students" value={stats.students} />
+            <Stat label="Teachers" value={stats.teachers} />
+          </Row>
+          <Row>
+            <Stat label="Admins" value={stats.admins} />
+            <Stat label="Pending" value={stats.pending} tone="warn" />
+          </Row>
+          <Row>
+            <Stat label="Answered" value={stats.answered} tone="success" />
+            <View style={{ flex: 1 }} />
+          </Row>
+        </>
+      )}
 
-        {/* Users Card */}
-        <Card style={{ marginTop: theme.gap }}>
-          <Text style={styles.cardTitle}>Utilisateurs</Text>
-          <Text style={styles.cardHint}>Filtrer par rôle</Text>
-          <View style={styles.pickerWrap}>
-            <Picker selectedValue={userRoleFilter} onValueChange={setUserRoleFilter} dropdownIconColor={theme.colors.text} style={styles.picker}>
-              <Picker.Item label="All Roles" value="" color="#fff" />
-              <Picker.Item label="Student" value="student" color="#fff" />
-              <Picker.Item label="Teacher" value="teacher" color="#fff" />
-              <Picker.Item label="Admin" value="admin" color="#fff" />
-            </Picker>
-          </View>
+      {tab === 'users' && (
+        <Card>
+          <Text style={styles.cardTitle}>Users</Text>
+          <Text style={styles.cardHint}>Filter by role</Text>
+
+          <ThemedSelect
+            value={userRoleFilter}
+            onChange={setUserRoleFilter}
+            placeholder="All roles"
+            options={[
+              { label: 'All roles', value: '' },
+              { label: 'Student', value: 'student' },
+              { label: 'Teacher', value: 'teacher' },
+              { label: 'Admin', value: 'admin' },
+            ]}
+          />
 
           {filteredUsers.length === 0 ? (
-              <Text style={styles.empty}>Aucun utilisateur</Text>
+            <Text style={styles.empty}>No users</Text>
           ) : (
-              filteredUsers.slice(0, 10).map((user) => (
-                  <View key={user.id} style={styles.itemRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.itemTitle}>{user.full_name}</Text>
-                      <Text style={styles.itemSub}>{user.email}</Text>
-                      <View style={{ marginTop: 8 }}>
-                        <Chip label={user.role} />
-                      </View>
-                    </View>
-                    <TouchableOpacity
-                        onPress={() => deleteUser(user.id)}
-                        disabled={busyDelete === user.id}
-                        style={[styles.dangerBtn, busyDelete === user.id && { opacity: 0.6 }]}
-                        activeOpacity={0.8}
-                    >
-                      <Text style={styles.dangerBtnText}>{busyDelete === user.id ? '...' : 'Delete'}</Text>
-                    </TouchableOpacity>
+            filteredUsers.slice(0, 20).map((user) => (
+              <View key={user.id} style={styles.itemRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.itemTitle}>{user.full_name}</Text>
+                  <Text style={styles.itemSub}>{user.email}</Text>
+                  <View style={{ marginTop: 8 }}>
+                    <Chip label={user.role} />
                   </View>
-              ))
+                </View>
+                <TouchableOpacity
+                  onPress={() => deleteUser(user.id)}
+                  disabled={busyDelete === user.id}
+                  style={[styles.dangerBtn, busyDelete === user.id && { opacity: 0.6 }]}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.dangerBtnText}>{busyDelete === user.id ? '...' : 'Delete'}</Text>
+                </TouchableOpacity>
+              </View>
+            ))
           )}
         </Card>
+      )}
 
-        {/* Tickets Card */}
-        <Card style={{ marginTop: theme.gap }}>
-          <Text style={styles.cardTitle}>Tickets récents</Text>
-          <Text style={styles.cardHint}>Filtrer par statut</Text>
-          <View style={styles.pickerWrap}>
-            <Picker selectedValue={ticketStatusFilter} onValueChange={setTicketStatusFilter} dropdownIconColor={theme.colors.text} style={styles.picker}>
-              <Picker.Item label="All Statuses" value="" color="#fff" />
-              <Picker.Item label="Pending" value="pending" color="#fff" />
-              <Picker.Item label="Answered" value="answered" color="#fff" />
-            </Picker>
-          </View>
+      {tab === 'tickets' && (
+        <Card>
+          <Text style={styles.cardTitle}>Recent Tickets</Text>
+          <Text style={styles.cardHint}>Filter by status</Text>
+
+          <ThemedSelect
+            value={ticketStatusFilter}
+            onChange={setTicketStatusFilter}
+            placeholder="All statuses"
+            options={[
+              { label: 'All statuses', value: '' },
+              { label: 'Pending', value: 'pending' },
+              { label: 'Answered', value: 'answered' },
+            ]}
+          />
 
           {filteredTickets.length === 0 ? (
-              <Text style={styles.empty}>Aucun ticket</Text>
+            <Text style={styles.empty}>No tickets</Text>
           ) : (
-              filteredTickets.slice(0, 10).map((t) => (
-                  <View key={t.id} style={styles.ticketRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.itemTitle}>{t.subject || 'Ticket'}</Text>
-                      <Text style={styles.itemSub}>{t.student_name} → {t.teacher_name}</Text>
-                    </View>
-                    <Chip label={t.response ? 'Answered' : 'Pending'} />
-                  </View>
-              ))
+            filteredTickets.slice(0, 20).map((t) => (
+              <View key={t.id} style={styles.ticketRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.itemTitle}>{t.subject || 'Ticket'}</Text>
+                  <Text style={styles.itemSub}>{t.student_name} → {t.teacher_name}</Text>
+                </View>
+                <Chip label={t.response ? 'Answered' : 'Pending'} />
+              </View>
+            ))
           )}
         </Card>
+      )}
 
-        <View style={{ height: 48 }} />
-      </ScrollView>
+      <View style={{ height: 48 }} />
+    </ScrollView>
   );
 }
 
+/* ---------- Styles ---------- */
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: theme.colors.bg,
-  },
+  safe: { flex: 1, backgroundColor: theme.colors.bg },
+  row: { flexDirection: 'row', gap: theme.gap, marginBottom: theme.gap },
   title: {
-    color: theme.colors.text,
-    fontSize: 24,
-    fontWeight: '800',
-    marginBottom: theme.gap,
-    textAlign: 'center',
-  },
-  row: {
-    flexDirection: 'row',
-    gap: theme.gap,
-    marginBottom: theme.gap,
+    color: theme.colors.text, fontSize: 24, fontWeight: '800',
+    marginBottom: theme.gap, textAlign: 'center',
   },
   stat: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius,
-    padding: 16,
+    flex: 1, borderWidth: 1, borderColor: theme.colors.border,
+    borderRadius: theme.radius, padding: 16,
   },
-  statLabel: {
-    color: theme.colors.textMuted,
-    fontSize: 12,
-    marginBottom: 6,
-  },
-  statValue: {
-    color: theme.colors.text,
-    fontSize: 22,
-    fontWeight: '700',
-  },
+  statLabel: { color: theme.colors.textMuted, fontSize: 12, marginBottom: 6 },
+  statValue: { color: theme.colors.text, fontSize: 22, fontWeight: '700' },
+
   card: {
-    backgroundColor: theme.colors.card,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius,
-    padding: theme.gap,
+    backgroundColor: theme.colors.card, borderWidth: 1, borderColor: theme.colors.border,
+    borderRadius: theme.radius, padding: theme.gap,
   },
-  cardTitle: {
-    color: theme.colors.text,
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  cardHint: {
-    color: theme.colors.textMuted,
-    fontSize: 12,
-    marginBottom: 8,
-  },
-  pickerWrap: {
-    borderWidth: 1,
-    borderColor: theme.colors.border,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: theme.gap,
-    backgroundColor: theme.colors.surface,
-  },
-  picker: {
-    color: theme.colors.text,
-  },
+  cardTitle: { color: theme.colors.text, fontSize: 18, fontWeight: '700', marginBottom: 8 },
+  cardHint: { color: theme.colors.textMuted, fontSize: 12, marginBottom: 8 },
+
+  /* Items */
   itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    paddingVertical: 14,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderTopWidth: 1, borderTopColor: theme.colors.border, paddingVertical: 14,
   },
   ticketRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
-    paddingVertical: 14,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderTopWidth: 1, borderTopColor: theme.colors.border, paddingVertical: 14,
   },
-  itemTitle: {
-    color: theme.colors.text,
-    fontWeight: '600',
-  },
-  itemSub: {
-    color: theme.colors.textMuted,
-    marginTop: 4,
-  },
-  empty: {
-    color: theme.colors.textMuted,
-    textAlign: 'center',
-    paddingVertical: 12,
-  },
+  itemTitle: { color: theme.colors.text, fontWeight: '600' },
+  itemSub: { color: theme.colors.textMuted, marginTop: 4 },
+  empty: { color: theme.colors.textMuted, textAlign: 'center', paddingVertical: 12 },
+
   chip: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    backgroundColor: theme.colors.surface,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: theme.colors.border,
+    alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4,
+    backgroundColor: theme.colors.surface, borderRadius: 999,
+    borderWidth: 1, borderColor: theme.colors.border,
   },
-  chipText: {
-    color: theme.colors.text,
-    fontSize: 12,
-    textTransform: 'capitalize',
+  chipText: { color: theme.colors.text, fontSize: 12, textTransform: 'capitalize' },
+
+  dangerBtn: { paddingHorizontal: 14, paddingVertical: 10, backgroundColor: theme.colors.danger, borderRadius: 12 },
+  dangerBtnText: { color: '#fff', fontWeight: '700' },
+
+  /* Top tabs */
+  tab: {
+    flex: 1, borderWidth: 1, borderColor: theme.colors.border, borderRadius: 999,
+    paddingVertical: 10, alignItems: 'center', backgroundColor: theme.colors.card,
   },
-  dangerBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: theme.colors.danger,
-    borderRadius: 12,
+  tabActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  tabText: { color: theme.colors.text },
+  tabTextActive: { color: '#fff', fontWeight: '700' },
+
+  /* ThemedSelect */
+  selectTrigger: {
+    borderWidth: 1, borderColor: theme.colors.border, borderRadius: 12,
+    backgroundColor: theme.colors.surface, paddingHorizontal: 14, paddingVertical: 14,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.gap,
   },
-  dangerBtnText: {
-    color: '#fff',
-    fontWeight: '700',
+  selectText: { color: theme.colors.text, fontSize: 14 },
+  selectChevron: { color: theme.colors.textMuted, marginLeft: 8 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: 16 },
+  modalSheet: {
+    backgroundColor: theme.colors.card, borderRadius: theme.radius,
+    borderWidth: 1, borderColor: theme.colors.border, padding: theme.gap, width: '92%', maxHeight: '80%',
   },
+  modalTitle: { color: theme.colors.text, fontSize: 16, fontWeight: '700', marginBottom: 8 },
+  optionRow: {
+    paddingVertical: 12, paddingHorizontal: 12,
+    borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10,
+    marginBottom: 8, backgroundColor: theme.colors.surface,
+  },
+  optionText: { color: theme.colors.text },
+  modalClose: {
+    marginTop: 8, alignSelf: 'flex-end', paddingHorizontal: 12, paddingVertical: 10,
+    borderRadius: 10, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface,
+  },
+  modalCloseText: { color: theme.colors.text, fontWeight: '700' },
 });
