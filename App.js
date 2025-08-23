@@ -7,7 +7,7 @@ import {
   StyleSheet,
   Animated,
   Image,
-  ScrollView,
+  // ❌ ScrollView removed
 } from 'react-native';
 
 // Screens
@@ -19,7 +19,6 @@ import AdminScreen from './screens/AdminScreen';
 import LessonScreen from './screens/LessonScreen';
 import StudentCalendarScreen from './screens/StudentCalendarScreen';
 import TeacherLessonScreen from './screens/TeacherLessonScreen';
-import AttendanceScreen from './screens/AttendanceScreen'; // <-- NEW
 
 /**
  * THEME — palette & constants
@@ -51,10 +50,10 @@ const theme = {
 function Banner({ visible, message, anim }) {
   if (!visible) return null;
   return (
-    <Animated.View style={[styles.banner, { transform: [{ translateY: anim }] }]}>
-      <Text style={styles.bannerTitle}>Today</Text>
-      <Text style={styles.bannerText}>{message}</Text>
-    </Animated.View>
+      <Animated.View style={[styles.banner, { transform: [{ translateY: anim }] }]}>
+        <Text style={styles.bannerTitle}>Today</Text>
+        <Text style={styles.bannerText}>{message}</Text>
+      </Animated.View>
   );
 }
 
@@ -63,15 +62,15 @@ function Banner({ visible, message, anim }) {
  */
 function ActionButton({ label, icon, onPress, disabled }) {
   return (
-    <TouchableOpacity
-      onPress={onPress}
-      disabled={disabled}
-      style={[styles.actionBtn, disabled && { opacity: 0.5 }]}
-      activeOpacity={0.8}
-    >
-      <View style={styles.actionIcon}>{icon}</View>
-      <Text style={styles.actionLabel}>{label}</Text>
-    </TouchableOpacity>
+      <TouchableOpacity
+          onPress={onPress}
+          disabled={disabled}
+          style={[styles.actionBtn, disabled && { opacity: 0.5 }]}
+          activeOpacity={0.8}
+      >
+        <View style={styles.actionIcon}>{icon}</View>
+        <Text style={styles.actionLabel}>{label}</Text>
+      </TouchableOpacity>
   );
 }
 
@@ -116,25 +115,25 @@ export default function App() {
         if (todays.length > 0) {
           const now = new Date();
           const msg = todays
-            .map((l) => {
-              const [hour, min] = (l.time || '00:00').split(':').map(Number);
-              const lessonDate = new Date(`${l.date}T${l.time || '00:00'}:00`);
-              const diffMs = lessonDate - now;
-              let timeInfo = '';
-              if (diffMs > 0) {
-                const diffMin = Math.floor(diffMs / 60000);
-                const hours = Math.floor(diffMin / 60);
-                const mins = diffMin % 60;
-                timeInfo = `in ${hours > 0 ? hours + 'h ' : ''}${mins}m`;
-              } else {
-                timeInfo = 'already started';
-              }
-              let details = `• ${l.title || 'Lesson'} — ${l.time} (${timeInfo})`;
-              if (l.location) details += `\n  Location: ${l.location}`;
-              if (l.teacher) details += `\n  Teacher: ${l.teacher}`;
-              return details;
-            })
-            .join('\n\n');
+              .map((l) => {
+                const [hour, min] = (l.time || '00:00').split(':').map(Number);
+                const lessonDate = new Date(`${l.date}T${l.time || '00:00'}:00`);
+                const diffMs = lessonDate - now;
+                let timeInfo = '';
+                if (diffMs > 0) {
+                  const diffMin = Math.floor(diffMs / 60000);
+                  const hours = Math.floor(diffMin / 60);
+                  const mins = diffMin % 60;
+                  timeInfo = `in ${hours > 0 ? hours + 'h ' : ''}${mins}m`;
+                } else {
+                  timeInfo = 'already started';
+                }
+                let details = `• ${l.title || 'Lesson'} — ${l.time} (${timeInfo})`;
+                if (l.location) details += `\n  Location: ${l.location}`;
+                if (l.teacher) details += `\n  Teacher: ${l.teacher}`;
+                return details;
+              })
+              .join('\n\n');
           showAnimatedBanner(msg);
         }
       }
@@ -166,89 +165,130 @@ export default function App() {
     setScreen('login');
   };
 
-  /** Small status dot */
+  /**
+   * Small status dot
+   */
   const Dot = () => <View style={styles.dot} />;
 
   return (
-    <SafeAreaView style={styles.safe}>
-      {/* Banner */}
-      <Banner visible={showBanner} message={bannerMessage} anim={bannerAnim} />
+      <SafeAreaView style={styles.safe}>
+        {/* Banner */}
+        <Banner visible={showBanner} message={bannerMessage} anim={bannerAnim} />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Image source={require('./logo.png')} style={styles.logo} resizeMode="contain" />
-        {currentUser && (
-          <View style={styles.userChip}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Dot />
-              <Text style={styles.userName}>{currentUser.full_name}</Text>
-              <Text style={styles.roleBadge}>{currentUser.role}</Text>
-            </View>
-            <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} activeOpacity={0.8}>
-              <Text style={styles.logoutText}>Logout</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-
-      {/* Body */}
-      <ScrollView contentContainerStyle={styles.body}>
-        {/* Actions */}
-        {currentUser ? (
-          <View style={styles.actionsGrid}>
-            {currentUser.role === 'student' && (
-              <>
-                <ActionButton label="Open Ticket" onPress={() => setScreen('tickets')} icon={<View style={styles.simpleIcon} />} disabled={!studentId} />
-                <ActionButton label="My Tickets" onPress={() => setScreen('ticketList')} icon={<View style={styles.simpleIcon} />} disabled={!currentUser} />
-                <ActionButton label="My Calendar" onPress={() => setScreen('calendar')} icon={<View style={styles.simpleIcon} />} disabled={!studentId} />
-              </>
-            )}
-
-            {currentUser.role === 'teacher' && (
-              <>
-                <ActionButton label="My Lessons" onPress={() => setScreen('teacherLessons')} icon={<View style={styles.simpleIcon} />} disabled={!teacherId} />
-                <ActionButton label="My Tickets" onPress={() => setScreen('ticketList')} icon={<View style={styles.simpleIcon} />} disabled={!teacherId} />
-                <ActionButton label="Create Lesson" onPress={() => setScreen('lesson')} icon={<View style={styles.simpleIcon} />} disabled={!teacherId} />
-                <ActionButton label="Attendance" onPress={() => setScreen('attendance')} icon={<View style={styles.simpleIcon} />} disabled={!teacherId} />
-              </>
-            )}
-
-            {currentUser.role === 'admin' && (
-              <>
-                <ActionButton label="Admin Panel" onPress={() => setScreen('admin')} icon={<View style={styles.simpleIcon} />} disabled={!adminId} />
-                <ActionButton label="Attendance" onPress={() => setScreen('attendance')} icon={<View style={styles.simpleIcon} />} disabled={!adminId} />
-              </>
-            )}
-          </View>
-        ) : (
-          <View style={styles.welcomeCard}>
-            <Text style={styles.welcomeTitle}>Welcome 👋</Text>
-            <Text style={styles.welcomeText}>
-              Log in to access your lessons, tickets, and schedule.
-            </Text>
-          </View>
-        )}
-
-        {/* Screens */}
-        <View style={{ flex: 1, width: '100%' }}>
-          {screen === 'register' && <RegisterScreen />}
-          {screen === 'login' && <LoginScreen onLoginSuccess={handleLoginSuccess} />}
-          {screen === 'tickets' && studentId && <TicketScreen studentId={studentId} />}
-          {screen === 'ticketList' && currentUser && (
-            <TicketListScreen teacherId={teacherId} studentId={studentId} userRole={currentUser.role} />
-          )}
-          {screen === 'admin' && adminId && <AdminScreen adminId={adminId} />}
-          {screen === 'lesson' && teacherId && (
-            <LessonScreen teacherId={teacherId} navigation={{ goBack: () => setScreen('ticketList') }} />
-          )}
-          {screen === 'calendar' && studentId && <StudentCalendarScreen studentId={studentId} />}
-          {screen === 'teacherLessons' && teacherId && <TeacherLessonScreen teacherId={teacherId} />}
-          {screen === 'attendance' && currentUser && (
-            <AttendanceScreen userRole={currentUser.role} teacherId={teacherId} />
+        {/* Header */}
+        <View style={styles.header}>
+          <Image source={require('./logo.png')} style={styles.logo} resizeMode="contain" />
+          {currentUser && (
+              <View style={styles.userChip}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Dot />
+                  <Text style={styles.userName}>{currentUser.full_name}</Text>
+                  <Text style={styles.roleBadge}>{currentUser.role}</Text>
+                </View>
+                <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} activeOpacity={0.8}>
+                  <Text style={styles.logoutText}>Logout</Text>
+                </TouchableOpacity>
+              </View>
           )}
         </View>
-      </ScrollView>
-    </SafeAreaView>
+
+        {/* Body (NO ScrollView here) */}
+        <View style={styles.body}>
+          {/* Actions */}
+          {currentUser ? (
+              <View style={styles.actionsGrid}>
+                {currentUser.role === 'student' && (
+                    <>
+                      <ActionButton
+                          label="Open Ticket"
+                          onPress={() => setScreen('tickets')}
+                          icon={<View style={styles.simpleIcon} />}
+                          disabled={!studentId}
+                      />
+                      <ActionButton
+                          label="My Tickets"
+                          onPress={() => setScreen('ticketList')}
+                          icon={<View style={styles.simpleIcon} />}
+                          disabled={!currentUser}
+                      />
+                      <ActionButton
+                          label="My Calendar"
+                          onPress={() => setScreen('calendar')}
+                          icon={<View style={styles.simpleIcon} />}
+                          disabled={!studentId}
+                      />
+                    </>
+                )}
+
+                {currentUser.role === 'teacher' && (
+                    <>
+                      <ActionButton
+                          label="My Lessons"
+                          onPress={() => setScreen('teacherLessons')}
+                          icon={<View style={styles.simpleIcon} />}
+                          disabled={!teacherId}
+                      />
+                      <ActionButton
+                          label="My Tickets"
+                          onPress={() => setScreen('ticketList')}
+                          icon={<View style={styles.simpleIcon} />}
+                          disabled={!teacherId}
+                      />
+                      <ActionButton
+                          label="Create Lesson"
+                          onPress={() => setScreen('lesson')}
+                          icon={<View style={styles.simpleIcon} />}
+                          disabled={!teacherId}
+                      />
+                    </>
+                )}
+
+                {currentUser.role === 'admin' && (
+                    <ActionButton
+                        label="Admin Panel"
+                        onPress={() => setScreen('admin')}
+                        icon={<View style={styles.simpleIcon} />}
+                        disabled={!adminId}
+                    />
+                )}
+              </View>
+          ) : (
+              <View style={styles.welcomeCard}>
+                <Text style={styles.welcomeTitle}>Welcome 👋</Text>
+                <Text style={styles.welcomeText}>
+                  Log in to access your lessons, tickets, and schedule.
+                </Text>
+              </View>
+          )}
+
+          {/* Screens */}
+          <View style={{ flex: 1, width: '100%' }}>
+            {screen === 'register' && <RegisterScreen />}
+            {screen === 'login' && <LoginScreen onLoginSuccess={handleLoginSuccess} />}
+            {screen === 'tickets' && studentId && <TicketScreen studentId={studentId} />}
+            {screen === 'ticketList' && currentUser && (
+                <TicketListScreen
+                    teacherId={teacherId}
+                    studentId={studentId}
+                    userRole={currentUser.role}
+                />
+            )}
+            {screen === 'admin' && adminId && <AdminScreen adminId={adminId} />}
+            {screen === 'lesson' && teacherId && (
+                <LessonScreen
+                    teacherId={teacherId}
+                    navigation={{ goBack: () => setScreen('ticketList') }}
+                />
+            )}
+            {screen === 'calendar' && studentId && (
+                <StudentCalendarScreen studentId={studentId} />
+            )}
+            {screen === 'teacherLessons' && teacherId && (
+                <TeacherLessonScreen teacherId={teacherId} />
+            )}
+          </View>
+        </View>
+      </SafeAreaView>
   );
 }
 
@@ -305,6 +345,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   body: {
+    flex: 1,
     padding: 16,
     gap: 16,
   },
