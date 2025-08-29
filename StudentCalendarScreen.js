@@ -36,6 +36,8 @@ function Pill({ label, tone = 'default' }) {
     default: { bg: theme.colors.surface, color: theme.colors.text },
     success: { bg: 'rgba(22,163,74,0.15)', color: theme.colors.success },
     warn: { bg: 'rgba(245,158,11,0.15)', color: '#F59E0B' },
+    muted: { bg: 'rgba(148,163,184,0.15)', color: '#94A3B8' },
+    info: { bg: 'rgba(37,99,235,0.15)', color: '#60A5FA' },
   };
   const { bg, color } = map[tone] || map.default;
   return (
@@ -46,12 +48,31 @@ function Pill({ label, tone = 'default' }) {
 }
 
 function PrimaryButton({ title, onPress, disabled, tone = 'primary' }) {
-  const bg = tone === 'danger' ? theme.colors.danger : tone === 'success' ? theme.colors.success : theme.colors.primary;
+  const bg =
+    tone === 'danger'
+      ? theme.colors.danger
+      : tone === 'success'
+        ? theme.colors.success
+        : theme.colors.primary;
   return (
-    <TouchableOpacity onPress={onPress} disabled={disabled} activeOpacity={0.85} style={[styles.primaryBtn, { backgroundColor: bg }, disabled && { opacity: 0.6 }]}>
+    <TouchableOpacity
+      onPress={onPress}
+      disabled={disabled}
+      activeOpacity={0.85}
+      style={[styles.primaryBtn, { backgroundColor: bg }, disabled && { opacity: 0.6 }]}
+    >
       <Text style={styles.primaryBtnText}>{title}</Text>
     </TouchableOpacity>
   );
+}
+
+// === Helper: past lesson check (client-side UX) ===
+function isLessonPast(dateStr, timeStr) {
+  if (!dateStr) return false;
+  const iso = `${dateStr}T${(timeStr || '00:00')}:00`;
+  const lessonTs = new Date(iso).getTime();
+  const nowTs = Date.now();
+  return Number.isFinite(lessonTs) && lessonTs < nowTs;
 }
 
 export default function StudentCalendarScreen({ studentId }) {
@@ -75,7 +96,9 @@ export default function StudentCalendarScreen({ studentId }) {
     }
   }, []);
 
-  useEffect(() => { init(); }, [init]);
+  useEffect(() => {
+    init();
+  }, [init]);
 
   const onRefresh = async () => {
     try {
@@ -93,7 +116,9 @@ export default function StudentCalendarScreen({ studentId }) {
         const data = await res.json();
         setLessons(Array.isArray(data) ? data : []);
         const marks = {};
-        (Array.isArray(data) ? data : []).forEach((l) => { marks[l.date] = { marked: true, dotColor: '#60A5FA' }; });
+        (Array.isArray(data) ? data : []).forEach((l) => {
+          if (l?.date) marks[l.date] = { marked: true, dotColor: '#60A5FA' };
+        });
         setMarkedDates(marks);
       }
     } catch (e) {
@@ -140,17 +165,25 @@ export default function StudentCalendarScreen({ studentId }) {
     setBusyAction(false);
   };
 
-  const signUp = async (lessonId) => {
+  const signUp = async (lesson) => {
+    // Client-side guard
+    if (isLessonPast(lesson.date, lesson.time)) {
+      Alert.alert('Unavailable', 'You cannot sign up for a past lesson.');
+      return;
+    }
     try {
       setBusyAction(true);
-      const res = await fetch(`http://10.0.2.2:3001/lessons/${lessonId}/signup`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ student_id: studentId }),
+      const res = await fetch(`http://10.0.2.2:3001/lessons/${lesson.id}/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: studentId }),
       });
       if (res.ok) {
         await fetchSignedUpLessons();
         Alert.alert('Signed up!', 'You have signed up for this lesson.');
       } else {
-        Alert.alert('Error', 'Could not sign up.');
+        const msg = await res.text();
+        Alert.alert('Error', msg || 'Could not sign up.');
       }
     } catch (e) {
       Alert.alert('Error', 'Network error');
@@ -163,14 +196,17 @@ export default function StudentCalendarScreen({ studentId }) {
     try {
       setBusyAction(true);
       const res = await fetch(`http://10.0.2.2:3001/lessons/${lessonId}/unsign`, {
-        method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ student_id: studentId }),
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: studentId }),
       });
       if (res.ok) {
         await fetchSignedUpLessons();
         Alert.alert('Unregistered', 'You have been removed from this lesson.');
         closeLessonModal();
       } else {
-        Alert.alert('Error', 'Could not unsign.');
+        const msg = await res.text();
+        Alert.alert('Error', msg || 'Could not unsign.');
       }
     } catch (e) {
       Alert.alert('Error', 'Network error');
@@ -192,8 +228,14 @@ export default function StudentCalendarScreen({ studentId }) {
     AddCalendarEvent.presentEventCreatingDialog(eventConfig).catch(() => {});
   };
 
-  const lessonsForDate = useMemo(() => lessons.filter((l) => l.date === selectedDate), [lessons, selectedDate]);
-  const isSigned = useCallback((id) => signedUpLessons.some((l) => l.id === id), [signedUpLessons]);
+  const lessonsForDate = useMemo(
+    () => lessons.filter((l) => l.date === selectedDate),
+    [lessons, selectedDate]
+  );
+  const isSigned = useCallback(
+    (id) => signedUpLessons.some((l) => l.id === id),
+    [signedUpLessons]
+  );
 
   if (loading) {
     return (
@@ -214,18 +256,28 @@ export default function StudentCalendarScreen({ studentId }) {
       <FlatList
         data={signedUpLessons}
         keyExtractor={(l) => String(l.id)}
-        renderItem={({ item }) => (
-          <TouchableOpacity onPress={() => openLessonModal(item)} activeOpacity={0.85}>
-            <View style={styles.lessonBox}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={styles.lessonTitle}>{item.title}</Text>
-                <Pill label="Signed" tone="success" />
+        renderItem={({ item }) => {
+          const past = isLessonPast(item.date, item.time);
+          return (
+            <TouchableOpacity onPress={() => openLessonModal(item)} activeOpacity={0.85}>
+              <View style={styles.lessonBox}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.lessonTitle}>{item.title}</Text>
+                  <View style={{ flexDirection:'row', gap:6 }}>
+                    <Pill label="Signed" tone="success" />
+                    <Pill label={past ? 'Past' : 'Upcoming'} tone={past ? 'muted' : 'info'} />
+                  </View>
+                </View>
+                <Text style={styles.lessonMeta}>{item.date} {item.time}</Text>
+                {!!item.description && (
+                  <Text numberOfLines={1} ellipsizeMode="tail" style={styles.lessonDesc}>
+                    {item.description}
+                  </Text>
+                )}
               </View>
-              <Text style={styles.lessonMeta}>{item.date} {item.time}</Text>
-              {!!item.description && <Text numberOfLines={1} ellipsizeMode="tail" style={styles.lessonDesc}>{item.description}</Text>}
-            </View>
-          </TouchableOpacity>
-        )}
+            </TouchableOpacity>
+          );
+        }}
         ListEmptyComponent={<Text style={styles.empty}>No signed up lessons yet.</Text>}
         style={{ marginBottom: 20 }}
         scrollEnabled={false}
@@ -236,7 +288,15 @@ export default function StudentCalendarScreen({ studentId }) {
         <Calendar
           markedDates={{
             ...markedDates,
-            ...(selectedDate ? { [selectedDate]: { selected: true, marked: !!markedDates[selectedDate], selectedColor: '#2563EB' } } : {}),
+            ...(selectedDate
+              ? {
+                [selectedDate]: {
+                  selected: true,
+                  marked: !!markedDates[selectedDate],
+                  selectedColor: '#2563EB',
+                },
+              }
+              : {}),
           }}
           onDayPress={(day) => setSelectedDate(day.dateString)}
           theme={{
@@ -256,26 +316,35 @@ export default function StudentCalendarScreen({ studentId }) {
           <FlatList
             data={lessonsForDate}
             keyExtractor={(l) => String(l.id)}
-            renderItem={({ item }) => (
-              <View style={styles.lessonBox}>
-                <Text style={styles.lessonTitle}>{item.title}</Text>
-                <Text style={styles.lessonMeta}>{item.time}</Text>
-                {!!item.description && <Text style={styles.lessonDesc}>{item.description}</Text>}
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-                  <PrimaryButton
-                    title={isSigned(item.id) ? 'Signed' : 'Sign Up'}
-                    onPress={() => signUp(item.id)}
-                    disabled={isSigned(item.id) || busyAction}
-                    tone={isSigned(item.id) ? 'success' : 'primary'}
-                  />
-                  <PrimaryButton
-                    title="Details"
-                    onPress={() => openLessonModal(item)}
-                    disabled={busyAction}
-                  />
+            renderItem={({ item }) => {
+              const past = isLessonPast(item.date, item.time);
+              const signed = isSigned(item.id);
+              return (
+                <View style={styles.lessonBox}>
+                  <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}>
+                    <Text style={styles.lessonTitle}>{item.title}</Text>
+                    <Pill label={past ? 'Past' : 'Upcoming'} tone={past ? 'muted' : 'info'} />
+                  </View>
+                  <Text style={styles.lessonMeta}>{item.time}</Text>
+                  {!!item.description && <Text style={styles.lessonDesc}>{item.description}</Text>}
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                    {!past && (
+                      <PrimaryButton
+                        title={signed ? 'Signed' : 'Sign Up'}
+                        onPress={() => signUp(item)}
+                        disabled={signed || busyAction}
+                        tone={signed ? 'success' : 'primary'}
+                      />
+                    )}
+                    <PrimaryButton
+                      title="Details"
+                      onPress={() => openLessonModal(item)}
+                      disabled={busyAction}
+                    />
+                  </View>
                 </View>
-              </View>
-            )}
+              );
+            }}
             ListEmptyComponent={<Text style={styles.empty}>No lessons on this day.</Text>}
             scrollEnabled={false}
           />
@@ -290,23 +359,42 @@ export default function StudentCalendarScreen({ studentId }) {
                 <Text style={styles.modalTitle}>{selectedLesson.title}</Text>
                 <Text style={styles.modalMeta}>Date: {selectedLesson.date}</Text>
                 <Text style={styles.modalMeta}>Time: {selectedLesson.time}</Text>
-                {!!selectedLesson.teacher_name && <Text style={styles.modalMeta}>Teacher: {selectedLesson.teacher_name}</Text>}
-                {!!selectedLesson.description && <Text style={[styles.modalMeta, { marginTop: 6 }]}>{selectedLesson.description}</Text>}
+                {!!selectedLesson.teacher_name && (
+                  <Text style={styles.modalMeta}>Teacher: {selectedLesson.teacher_name}</Text>
+                )}
+                {!!selectedLesson.description && (
+                  <Text style={[styles.modalMeta, { marginTop: 6 }]}>
+                    {selectedLesson.description}
+                  </Text>
+                )}
 
-                <Text style={[styles.modalMeta, { marginTop: 12, fontWeight: '700' }]}>Signed Up Students:</Text>
+                <Text style={[styles.modalMeta, { marginTop: 12, fontWeight: '700' }]}>
+                  Signed Up Students:
+                </Text>
                 <FlatList
                   data={lessonStudents}
                   keyExtractor={(s) => String(s.id)}
-                  renderItem={({ item }) => <Text style={styles.modalMeta}>• {item.full_name} ({item.email})</Text>}
+                  renderItem={({ item }) => (
+                    <Text style={styles.modalMeta}>• {item.full_name} ({item.email})</Text>
+                  )}
                   ListEmptyComponent={<Text style={styles.modalMeta}>No students signed up yet.</Text>}
                 />
 
-                {isSigned(selectedLesson.id) && (
-                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-                    <PrimaryButton title="Unsign" onPress={() => unsign(selectedLesson.id)} tone="danger" />
-                    <PrimaryButton title="Add to Calendar" onPress={() => addToCalendar(selectedLesson)} tone="success" />
-                  </View>
-                )}
+                {/* Actions (on laisse l’unsign possible même si le cours est passé — adapte si tu veux le bloquer aussi) */}
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                  {isSigned(selectedLesson.id) && (
+                    <PrimaryButton
+                      title="Unsign"
+                      onPress={() => unsign(selectedLesson.id)}
+                      tone="danger"
+                    />
+                  )}
+                  <PrimaryButton
+                    title="Add to Calendar"
+                    onPress={() => addToCalendar(selectedLesson)}
+                    tone="success"
+                  />
+                </View>
 
                 <TouchableOpacity onPress={closeLessonModal} style={[styles.closeBtn]} activeOpacity={0.85}>
                   <Text style={styles.closeTxt}>Close</Text>
