@@ -77,7 +77,7 @@ export default function TeacherLessonScreen({ teacherId }) {
         const teacherLessons = (Array.isArray(data) ? data : []).filter((l) => l.teacher_id === teacherId);
         setLessons(teacherLessons);
         const marks = {};
-        teacherLessons.forEach((l) => { marks[l.date] = { marked: true, dotColor: '#60A5FA' }; });
+        teacherLessons.forEach((l) => { if (l.date) marks[l.date] = { marked: true, dotColor: '#60A5FA' }; });
         setMarkedDates(marks);
       }
     } catch (e) {
@@ -111,8 +111,9 @@ export default function TeacherLessonScreen({ teacherId }) {
     setLessonStudents([]);
   };
 
+  // >>> CHANGEMENT ICI: ne plus retourner tous les cours si aucune date n'est sélectionnée
   const lessonsForDate = useMemo(
-    () => (selectedDate ? lessons.filter((l) => l.date === selectedDate) : lessons),
+    () => (selectedDate ? lessons.filter((l) => l.date === selectedDate) : []),
     [selectedDate, lessons]
   );
 
@@ -160,7 +161,12 @@ export default function TeacherLessonScreen({ teacherId }) {
         />
       </Card>
 
-      {selectedDate ? (
+      {/* >>> CHANGEMENT ICI: n'afficher que si une date est choisie, sinon un hint */}
+      {!selectedDate ? (
+        <Text style={[styles.empty, { marginTop: 4 }]}>
+          Select a date to view lessons.
+        </Text>
+      ) : (
         <>
           <Text style={styles.subtitle}>Lessons on {selectedDate}:</Text>
           <FlatList
@@ -183,26 +189,6 @@ export default function TeacherLessonScreen({ teacherId }) {
             scrollEnabled={false}
           />
         </>
-      ) : (
-        <FlatList
-          data={lessons}
-          keyExtractor={(l) => String(l.id)}
-          renderItem={({ item }) => (
-            <TouchableOpacity onPress={() => openLessonModal(item)} activeOpacity={0.85}>
-              <View style={styles.lessonBox}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={styles.lessonTitle}>{item.title}</Text>
-                  <Pill label={`${item.date} ${item.time}`} />
-                </View>
-                {!!item.description && (
-                  <Text numberOfLines={1} ellipsizeMode="tail" style={styles.lessonDesc}>{item.description}</Text>
-                )}
-              </View>
-            </TouchableOpacity>
-          )}
-          ListEmptyComponent={<Text style={styles.empty}>No lessons created yet.</Text>}
-          scrollEnabled={false}
-        />
       )}
 
       <Modal visible={modalVisible} animationType="fade" transparent onRequestClose={closeLessonModal}>
@@ -292,4 +278,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
   },
   closeTxt: { color: theme.colors.text, fontWeight: '700' },
+  statText: { color: theme.colors.textMuted },
+  statValue: { color: theme.colors.text, fontWeight: '800' },
 });
