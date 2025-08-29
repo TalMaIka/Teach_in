@@ -62,25 +62,30 @@ export default function GradeTeacherScreen({ teacherId }) {
   const [openCalendar, setOpenCalendar] = useState(false);
   const [openStudents, setOpenStudents] = useState(false);
 
-  // Enrolled students for chosen lesson
+  // Enrolled
   const [enrolled, setEnrolled] = useState([]);
 
-  // ===== Summary (calendar-first, no global fetch) =====
+  // Summary (calendar-first)
   const [sumOpenCalendar, setSumOpenCalendar] = useState(false);
   const [sumSelectedDate, setSumSelectedDate] = useState(null);
-  const [sumLesson, setSumLesson] = useState(null); // chosen lesson for summary
+  const [sumLesson, setSumLesson] = useState(null);
   const [sumLoading, setSumLoading] = useState(false);
   const [sumRefreshing, setSumRefreshing] = useState(false);
-  const [sumItems, setSumItems] = useState([]);     // grades of the chosen lesson only
+  const [sumItems, setSumItems] = useState([]);
 
-  // ===== Initial data (teacher lessons + students) =====
+  // ==== Guard: teacherId required ====
+  const teacherIdNum = Number(teacherId);
+  const teacherIdReady = Number.isFinite(teacherIdNum) && teacherIdNum > 0;
+
+  // Initial data (needs teacherId)
   useEffect(() => {
+    if (!teacherIdReady) { setLoading(false); return; }
     (async () => {
       try {
         setLoading(true);
         const [L, S] = await Promise.all([
-          fetch(`${baseURL}/teachers/${teacherId}/lessons`),
-          fetch(`${baseURL}/teachers/${teacherId}/students`)
+          fetch(`${baseURL}/teachers/${teacherIdNum}/lessons`),
+          fetch(`${baseURL}/teachers/${teacherIdNum}/students`)
         ]);
         const ljs = await L.json().catch(()=>[]);
         const sjs = await S.json().catch(()=>[]);
@@ -92,9 +97,9 @@ export default function GradeTeacherScreen({ teacherId }) {
         setLoading(false);
       }
     })();
-  }, [teacherId]);
+  }, [teacherIdReady, teacherIdNum]);
 
-  // ===== Grade: load enrolled when lesson changes =====
+  // Grade: load enrolled when lesson changes
   useEffect(() => {
     (async () => {
       if (!lesson) { setEnrolled([]); setStudent(null); return; }
@@ -109,8 +114,11 @@ export default function GradeTeacherScreen({ teacherId }) {
     })();
   }, [lesson]);
 
-  // ===== Submit grade =====
+  // Submit grade (needs teacherId)
   const submit = async () => {
+    if (!teacherIdReady) {
+      return Alert.alert('Config', 'Missing teacherId. Please log in as a teacher.');
+    }
     const n = Number(grade);
     if (!lesson || !student) return Alert.alert('Missing data', 'Please select a lesson and a student.');
     if (!Number.isFinite(n) || n < 0 || n > 100) {
@@ -124,7 +132,7 @@ export default function GradeTeacherScreen({ teacherId }) {
         body: JSON.stringify({
           lesson_id: lesson.id,
           student_id: student.id,
-          teacher_id: teacherId,
+          teacher_id: teacherIdNum,
           grade: n,
           comment: comment.trim()
         })
@@ -139,7 +147,7 @@ export default function GradeTeacherScreen({ teacherId }) {
     }
   };
 
-  // ===== Calendar helpers (shared) =====
+  // Calendar helpers
   const lessonsByDate = useMemo(() => {
     const map = {};
     for (const l of lessons) {
@@ -151,7 +159,6 @@ export default function GradeTeacherScreen({ teacherId }) {
   }, [lessons]);
 
   const [selectedDate, setSelectedDate] = useState(null);
-
   const makeMarked = (dateSel) => {
     const marks = {};
     Object.keys(lessonsByDate).forEach(d => {
@@ -167,13 +174,11 @@ export default function GradeTeacherScreen({ teacherId }) {
     }
     return marks;
   };
-
   const markedDatesGrade   = useMemo(() => makeMarked(selectedDate),    [lessonsByDate, selectedDate]);
   const markedDatesSummary = useMemo(() => makeMarked(sumSelectedDate), [lessonsByDate, sumSelectedDate]);
-
   const lessonsForDate = (d) => (d ? (lessonsByDate[d] || []) : []);
 
-  // ===== Summary: load one-lesson grades =====
+  // Summary: load lesson grades (NO teacherId needed)
   const loadLessonSummary = useCallback(async (lessonId) => {
     try {
       setSumLoading(true);
@@ -204,6 +209,21 @@ export default function GradeTeacherScreen({ teacherId }) {
     const max = count ? Math.max(...gs) : null;
     return { count, avg: avg.toFixed(2), min, max };
   }, [sumItems]);
+
+  // ====== Render guards ======
+  if (!teacherIdReady) {
+    return (
+      <View style={[styles.safe, { padding:16, alignItems:'center', justifyContent:'center' }]}>
+        <View style={[styles.card, { width:'100%' }]}>
+          <Text style={[styles.title, { marginBottom:8 }]}>Grade — Configuration</Text>
+          <Text style={{ color: theme.colors.textMuted }}>
+            Missing <Text style={{ color: theme.colors.text, fontWeight:'700' }}>teacherId</Text>.
+            Please log in as a teacher or pass the prop <Text style={{ color: theme.colors.text, fontWeight:'700' }}>teacherId</Text> to this screen.
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   if (loading) {
     return (
@@ -280,7 +300,7 @@ export default function GradeTeacherScreen({ teacherId }) {
               <>
                 <Text style={styles.title}>Teacher's Grade Summary</Text>
 
-                {/* Picker by calendar — required before showing anything */}
+                {/* Calendar-driven lesson picker */}
                 <Select
                   label="Pick lesson by date"
                   value={sumLesson ? `${sumLesson.title} — ${(sumLesson.date || '').slice(0,10)} ${sumLesson.time || ''}` : ''}
@@ -319,7 +339,6 @@ export default function GradeTeacherScreen({ teacherId }) {
                     <Text style={styles.gradeTitle}>{item.full_name}</Text>
                     <Text style={styles.gradeScore}>{Number(item.grade).toFixed(1)}</Text>
                   </View>
-                  {/* The lesson title/date aren’t repeated since we’re in a per-lesson view */}
                 </View>
               ) : null
             )}
@@ -437,7 +456,7 @@ export default function GradeTeacherScreen({ teacherId }) {
                     setSumLesson(item);
                     setSumOpenCalendar(false);
                     setSumItems([]);
-                    await loadLessonSummary(item.id);
+                    await loadLessonSummary(item.id); // NO teacherId here
                   }}
                 >
                   <Text style={styles.rowTxt}>{item.title} — {item.time || ''}</Text>
@@ -480,8 +499,6 @@ const styles = StyleSheet.create({
   primaryBtn:{ backgroundColor:theme.colors.primary, paddingVertical:12, borderRadius:12, alignItems:'center', marginTop:16 },
   primaryBtnText:{ color:'#fff', fontWeight:'700' },
 
-  secondaryBtn:{ alignItems:'center', justifyContent:'center', backgroundColor:theme.colors.surface, borderWidth:1, borderColor:theme.colors.border, paddingVertical:12, borderRadius:12 },
-
   pillsRow:{ flexDirection:'row', gap:8, marginBottom:12 },
   pill:{ backgroundColor:theme.colors.surface, borderWidth:1, borderColor:theme.colors.border, borderRadius:999, paddingVertical:8, paddingHorizontal:14 },
   pillLabel:{ color:theme.colors.textMuted, fontSize:12 },
@@ -491,7 +508,6 @@ const styles = StyleSheet.create({
   gradeTitle:{ color:theme.colors.text, fontWeight:'800' },
   gradeSub:{ color:theme.colors.textMuted, marginTop:2 },
   gradeScore:{ color:'#fff', backgroundColor:theme.colors.primary, borderRadius:10, paddingHorizontal:10, paddingVertical:4, overflow:'hidden', fontWeight:'800' },
-  gradeComment:{ color:theme.colors.text, marginTop:8 },
 
   overlay:{ flex:1, backgroundColor:'rgba(0,0,0,0.7)', justifyContent:'center', alignItems:'center', padding:20 },
   sheet:{ backgroundColor:theme.colors.card, borderRadius:16, padding:20, width:'100%', maxHeight:'80%' },
