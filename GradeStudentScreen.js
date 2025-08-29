@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  ActivityIndicator, Modal, RefreshControl, Alert
+  ActivityIndicator, Modal, RefreshControl
 } from 'react-native';
 
 const theme = {
@@ -68,16 +68,20 @@ export default function GradeStudentScreen({ studentId }) {
         my_rank: js.my_rank ?? null,
       });
     } catch (e) {
-      // fallback minimal si l’endpoint n’est pas dispo
       setStats({
         my_grade: row.grade != null ? Number(row.grade) : null,
         class_avg: 0,
         class_count: 0,
         my_rank: null,
       });
-      // Alert.alert('Info', e?.message || 'Cannot load class stats');
     }
     setOpen(true);
+  };
+
+  // clamp helper
+  const clampPct = (n) => {
+    const v = Number.isFinite(n) ? n : 0;
+    return Math.max(0, Math.min(100, v));
   };
 
   if (loading) {
@@ -123,7 +127,7 @@ export default function GradeStudentScreen({ studentId }) {
         />
       )}
 
-      {/* Modal — anonymized stats only */}
+      {/* Modal — anonymized stats + progress bar */}
       <Modal visible={open} transparent animationType="fade" onRequestClose={()=>setOpen(false)}>
         <View style={styles.overlay}>
           <View style={styles.sheet}>
@@ -150,6 +154,31 @@ export default function GradeStudentScreen({ studentId }) {
                       {stats.my_rank ? `${stats.my_rank}/${stats.class_count}` : '-'}
                     </Text>
                   </View>
+                </View>
+
+                {/* Progress bar: green fill = your grade (0..100), red marker = class average */}
+                <View style={styles.progressWrap} accessible accessibilityLabel="Your grade vs class average">
+                  <View style={styles.progressTrack}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        { width: `${clampPct(stats.my_grade)}%` }
+                      ]}
+                    />
+                    <View
+                      style={[
+                        styles.avgMarker,
+                        { left: `${clampPct(stats.class_avg)}%` }
+                      ]}
+                    />
+                  </View>
+                  <View style={styles.progressScale}>
+                    <Text style={styles.progressTick}>0</Text>
+                    <Text style={styles.progressTick}>100</Text>
+                  </View>
+                  <Text style={styles.progressLegend}>
+                    <Text style={{ color: theme.colors.success, fontWeight:'800' }}>Green</Text> = your grade • <Text style={{ color: '#EF4444', fontWeight:'800' }}>Red line</Text> = class average
+                  </Text>
                 </View>
 
                 <Text style={styles.sheetSub}>
@@ -195,7 +224,7 @@ const styles = StyleSheet.create({
   sheetTitle:{ color: theme.colors.text, fontWeight:'800', fontSize:18 },
   sheetSub:{ color: theme.colors.textMuted, marginTop:10 },
 
-  statsRow:{ flexDirection:'row', gap:8, marginTop:8, marginBottom:8 },
+  statsRow:{ flexDirection:'row', gap:8, marginTop:8, marginBottom:12 },
   statPill:{
     flex:1,
     backgroundColor: theme.colors.surface,
@@ -205,6 +234,42 @@ const styles = StyleSheet.create({
   },
   statLabel:{ color: theme.colors.textMuted, fontSize:12 },
   statValue:{ color: theme.colors.text, fontWeight:'800', fontSize:16 },
+
+  /* Progress bar styles */
+  progressWrap:{ marginTop:8, marginBottom:8 },
+  progressTrack:{
+    position:'relative',
+    height:14,
+    borderRadius:999,
+    backgroundColor: theme.colors.surface,
+    borderWidth:1,
+    borderColor: theme.colors.border,
+    overflow:'hidden'
+  },
+  progressFill:{
+    position:'absolute',
+    left:0,
+    top:0,
+    bottom:0,
+    backgroundColor: theme.colors.success,
+    borderTopLeftRadius:999,
+    borderBottomLeftRadius:999,
+  },
+  avgMarker:{
+    position:'absolute',
+    top:-3,
+    width:2,
+    height:20,
+    backgroundColor:'#EF4444',
+    transform:[{ translateX:-1 }], 
+  },
+  progressScale:{
+    flexDirection:'row',
+    justifyContent:'space-between',
+    marginTop:6,
+  },
+  progressTick:{ color: theme.colors.textMuted, fontSize:12 },
+  progressLegend:{ color: theme.colors.textMuted, marginTop:6, fontSize:12 },
 
   closeBtn:{ alignSelf:'flex-end', paddingHorizontal:12, paddingVertical:10, borderRadius:10, borderWidth:1, borderColor: theme.colors.border, backgroundColor: theme.colors.surface, marginTop:8 },
   closeTxt:{ color: theme.colors.text, fontWeight:'700' },
