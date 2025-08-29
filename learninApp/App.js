@@ -1,14 +1,75 @@
 import React, { useState, useRef } from 'react';
-import { SafeAreaView, Button, View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import {
+  SafeAreaView,
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Animated,
+  Image,
+} from 'react-native';
+
+// Screens
 import RegisterScreen from './screens/RegisterScreen';
 import LoginScreen from './screens/LoginScreen';
 import TicketScreen from './screens/TicketScreen';
 import TicketListScreen from './screens/TicketListScreen';
 import AdminScreen from './screens/AdminScreen';
-import LessonScreen from './screens/LessonScreen';
+import LessonScreen from './screens/LessonCreateScreen';
 import StudentCalendarScreen from './screens/StudentCalendarScreen';
 import TeacherLessonScreen from './screens/TeacherLessonScreen';
-import { Image } from 'react-native';
+import AttendanceScreen from './screens/AttendanceScreen';
+import GradeTeacherScreen from './screens/GradeTeacherScreen';
+import GradeStudentScreen from './screens/GradeStudentScreen';
+
+const theme = {
+  colors: {
+    bg: '#0F172A', // app background (dark elegant)
+    card: '#111827',
+    surface: '#0B1220',
+    text: '#F3F4F6',
+    textMuted: '#9CA3AF',
+    primary: '#2563EB',
+    primaryMuted: '#1D4ED8',
+    danger: '#DC2626',
+    success: '#16A34A',
+    border: '#1F2937',
+    banner: '#2563EB',
+  },
+  radius: 16,
+  gap: 16,
+  h: { touch: 56 },
+};
+
+/**
+ * Banner (top toast)
+ */
+function Banner({ visible, message, anim }) {
+  if (!visible) return null;
+  return (
+      <Animated.View style={[styles.banner, { transform: [{ translateY: anim }] }]}>
+        <Text style={styles.bannerTitle}>Today</Text>
+        <Text style={styles.bannerText}>{message}</Text>
+      </Animated.View>
+  );
+}
+
+/**
+ * ActionButton — modern clickable card for main actions
+ */
+function ActionButton({ label, icon, onPress, disabled }) {
+  return (
+      <TouchableOpacity
+          onPress={onPress}
+          disabled={disabled}
+          style={[styles.actionBtn, disabled && { opacity: 0.5 }]}
+          activeOpacity={0.8}
+      >
+        <View style={styles.actionIcon}>{icon}</View>
+        <Text style={styles.actionLabel}>{label}</Text>
+      </TouchableOpacity>
+  );
+}
 
 export default function App() {
   const [screen, setScreen] = useState('login');
@@ -20,9 +81,8 @@ export default function App() {
   // Banner state
   const [bannerMessage, setBannerMessage] = useState('');
   const [showBanner, setShowBanner] = useState(false);
-  const bannerAnim = useRef(new Animated.Value(-80)).current;
+  const bannerAnim = useRef(new Animated.Value(-120)).current;
 
-  // Animated banner functions
   const showAnimatedBanner = (message) => {
     setBannerMessage(message);
     setShowBanner(true);
@@ -33,7 +93,7 @@ export default function App() {
     }).start(() => {
       setTimeout(() => {
         Animated.timing(bannerAnim, {
-          toValue: -80,
+          toValue: -120,
           duration: 400,
           useNativeDriver: true,
         }).start(() => setShowBanner(false));
@@ -41,53 +101,50 @@ export default function App() {
     });
   };
 
-  // More informative notification
-  const notifyStudentTodaysLessons = async (studentId) => {
+  // Notify today's lessons for student
+  const notifyStudentTodaysLessons = async (sid) => {
     try {
-      const res = await fetch(`http://10.0.2.2:3001/students/${studentId}/lessons`);
+      const res = await fetch(`http://10.0.2.2:3001/students/${sid}/lessons`);
       if (res.ok) {
         const lessons = await res.json();
         const today = new Date().toISOString().split('T')[0];
-        const todaysLessons = lessons.filter(l => l.date === today);
-        if (todaysLessons.length > 0) {
+        const todays = lessons.filter((l) => l.date === today);
+        if (todays.length > 0) {
           const now = new Date();
-          const lessonMsgs = todaysLessons.map(l => {
-            // l.time assumed format: "HH:MM"
-            const [hour, min] = l.time.split(':').map(Number);
-            const lessonDate = new Date(l.date + 'T' + l.time + ':00');
-            const diffMs = lessonDate - now;
-            let timeInfo = '';
-            if (diffMs > 0) {
-              const diffMin = Math.floor(diffMs / 60000);
-              const hours = Math.floor(diffMin / 60);
-              const mins = diffMin % 60;
-              let timeStr = '';
-              if (hours > 0) timeStr += `${hours}h `;
-              timeStr += `${mins}m`;
-              timeInfo = `starts in ${timeStr}`;
-            } else {
-              timeInfo = 'already started';
-            }
-            let details = `${l.title} at ${l.time} (${timeInfo})`;
-            if (l.location) details += `\nLocation: ${l.location}`;
-            if (l.teacher) details += `\nTeacher: ${l.teacher}`;
-            return details;
-          });
-          showAnimatedBanner(lessonMsgs.join('\n\n'));
+          const msg = todays
+              .map((l) => {
+                const [hour, min] = (l.time || '00:00').split(':').map(Number);
+                const lessonDate = new Date(`${l.date}T${l.time || '00:00'}:00`);
+                const diffMs = lessonDate - now;
+                let timeInfo = '';
+                if (diffMs > 0) {
+                  const diffMin = Math.floor(diffMs / 60000);
+                  const hours = Math.floor(diffMin / 60);
+                  const mins = diffMin % 60;
+                  timeInfo = `in ${hours > 0 ? hours + 'h ' : ''}${mins}m`;
+                } else {
+                  timeInfo = 'already started';
+                }
+                let details = `• ${l.title || 'Lesson'} — ${l.time} (${timeInfo})`;
+                if (l.location) details += `\n  Location: ${l.location}`;
+                if (l.teacher) details += `\n  Teacher: ${l.teacher}`;
+                return details;
+              })
+              .join('\n\n');
+          showAnimatedBanner(msg);
         }
       }
     } catch (e) {
-      // Optionally handle error
+      // silent
     }
   };
 
   const handleLoginSuccess = (user) => {
     setCurrentUser(user);
-
     if (user.role === 'student') {
       setStudentId(user.id);
       setScreen('calendar');
-      setTimeout(() => notifyStudentTodaysLessons(user.id), 3000); // 3s delay
+      setTimeout(() => notifyStudentTodaysLessons(user.id), 3000);
     } else if (user.role === 'teacher') {
       setTeacherId(user.id);
       setScreen('teacherLessons');
@@ -105,125 +162,303 @@ export default function App() {
     setScreen('login');
   };
 
+  const Dot = () => <View style={styles.dot} />;
+
   return (
-    <SafeAreaView style={{ flex: 1 }}>
-      {/* Animated Banner */}
-      {showBanner && (
-        <Animated.View
-          style={[
-            styles.banner,
-            { transform: [{ translateY: bannerAnim }] }
-          ]}
-        >
-          <Text style={styles.bannerText}>{bannerMessage}</Text>
-        </Animated.View>
-      )}
+      <SafeAreaView style={styles.safe}>
+        {/* Banner */}
+        <Banner visible={showBanner} message={bannerMessage} anim={bannerAnim} />
 
-      <Image
-        source={require('./logo.png')}
-        style={{ width: '60%', alignSelf: 'center'}}
-        resizeMode="contain"
-      />
-
-      {currentUser && (
-        <View style={styles.userInfoContainer}>
-          <Text style={styles.userInfo}>
-            Logged in as: {currentUser.full_name} ({currentUser.role})
-          </Text>
-          <TouchableOpacity
-            style={styles.logoutButton}
-            onPress={handleLogout}
-          >
-            <Text style={styles.logoutText}>Logout</Text>
-          </TouchableOpacity>
+        {/* Header */}
+        <View style={styles.header}>
+          <Image source={require('./logo.png')} style={styles.logo} resizeMode="contain" />
+          {currentUser && (
+              <View style={styles.userChip}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Dot />
+                  <Text style={styles.userName}>{currentUser.full_name}</Text>
+                  <Text style={styles.roleBadge}>{currentUser.role}</Text>
+                </View>
+                <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn} activeOpacity={0.8}>
+                  <Text style={styles.logoutText}>Logout</Text>
+                </TouchableOpacity>
+              </View>
+          )}
         </View>
-      )}
 
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around', padding: 20 }}>
-        {!currentUser ? (
-          <>
-          </>
-        ) : (
-          <>
-            {currentUser.role === 'student' && (
-              <>
-                <Button title="Open Ticket" onPress={() => setScreen('tickets')} disabled={!studentId} />
-                <Button title="My Tickets" onPress={() => setScreen('ticketList')} disabled={!currentUser} />
-                <Button title="Lesson Calendar" onPress={() => setScreen('calendar')} disabled={!studentId} />
-              </>
-            )}
-            {currentUser.role === 'teacher' && (
-              <>
-                <Button title="My Lessons" onPress={() => setScreen('teacherLessons')} disabled={!teacherId} />
-                <Button title="My Tickets" onPress={() => setScreen('ticketList')} disabled={!teacherId} />
-                <Button title="Create Lesson" onPress={() => setScreen('lesson')} disabled={!teacherId} />
-              </>
-            )}
-            {currentUser.role === 'admin' && (
-              <Button title="Admin Panel" onPress={() => setScreen('admin')} disabled={!adminId} />
-            )}
-          </>
-        )}
-      </View>
+        {/* Body (no ScrollView here) */}
+        <View style={styles.body}>
+          {/* Quick actions */}
+          {currentUser ? (
+              <View style={styles.actionsGrid}>
+                {currentUser.role === 'student' && (
+                    <>
+                      <ActionButton
+                          label="Open Ticket"
+                          onPress={() => setScreen('tickets')}
+                          icon={<View style={styles.simpleIcon} />}
+                          disabled={!studentId}
+                      />
+                      <ActionButton
+                          label="My Tickets"
+                          onPress={() => setScreen('ticketList')}
+                          icon={<View style={styles.simpleIcon} />}
+                          disabled={!currentUser}
+                      />
+                      <ActionButton
+                          label="My Calendar"
+                          onPress={() => setScreen('calendar')}
+                          icon={<View style={styles.simpleIcon} />}
+                          disabled={!studentId}
+                      />
+                      <ActionButton
+                           label="Grade Students"
+                           onPress={() => setScreen('gradeStudent')}
+                           icon={<View style={styles.simpleIcon} />}
+                           disabled={!studentId} />
+                    </>
+                )}
 
-      {screen === 'register' && <RegisterScreen />}
-      {screen === 'login' && <LoginScreen onLoginSuccess={handleLoginSuccess} />}
-      {screen === 'tickets' && studentId && <TicketScreen studentId={studentId} />}
-      {screen === 'ticketList' && currentUser && (
-        <TicketListScreen
-          teacherId={teacherId}
-          studentId={studentId}
-          userRole={currentUser.role}
-        />
-      )}
-      {screen === 'admin' && adminId && <AdminScreen adminId={adminId} />}
-      {screen === 'lesson' && teacherId && <LessonScreen teacherId={teacherId} navigation={{ goBack: () => setScreen('ticketList') }} />}
-      {screen === 'calendar' && studentId && <StudentCalendarScreen studentId={studentId} />}
-      {screen === 'teacherLessons' && teacherId && <TeacherLessonScreen teacherId={teacherId} />}
-    </SafeAreaView>
+                {currentUser.role === 'teacher' && (
+                    <>
+                      <ActionButton
+                          label="My Lessons"
+                          onPress={() => setScreen('teacherLessons')}
+                          icon={<View style={styles.simpleIcon} />}
+                          disabled={!teacherId}
+                      />
+                      <ActionButton
+                          label="My Tickets"
+                          onPress={() => setScreen('ticketList')}
+                          icon={<View style={styles.simpleIcon} />}
+                          disabled={!teacherId}
+                      />
+                      <ActionButton
+                          label="Create Lesson"
+                          onPress={() => setScreen('lesson')}
+                          icon={<View style={styles.simpleIcon} />}
+                          disabled={!teacherId}
+                      />
+                      <ActionButton
+                          label="Attendance"
+                          onPress={() => setScreen('attendance')}
+                          icon={<View style={styles.simpleIcon} />}
+                          disabled={!teacherId}
+                      />
+                      <ActionButton label="Grade Students"
+                          onPress={() => setScreen('gradeTeacher')}
+                          icon={<View style={styles.simpleIcon} />}
+                          disabled={!teacherId} />
+
+                    </>
+                )}
+
+                {currentUser.role === 'admin' && (
+                    <>
+                      <ActionButton
+                          label="Admin Panel"
+                          onPress={() => setScreen('admin')}
+                          icon={<View style={styles.simpleIcon} />}
+                          disabled={!adminId}
+                      />
+                      <ActionButton
+                          label="Attendance"
+                          onPress={() => setScreen('attendance')}
+                          icon={<View style={styles.simpleIcon} />}
+                          disabled={!adminId}
+                      />
+                      <ActionButton
+                        label="Register User"
+                        onPress={() => setScreen('register')}
+                        icon={<View style={styles.simpleIcon} />}
+                        disabled={!adminId}
+                      />
+                    </>
+                )}
+              </View>
+          ) : (
+              <View style={styles.welcomeCard}>
+                <Text style={styles.welcomeTitle}>Welcome 👋</Text>
+                <Text style={styles.welcomeText}>
+                  Log in to access your lessons, tickets, and schedule.
+                </Text>
+              </View>
+          )}
+
+          {/* Screens */}
+          <View style={{ flex: 1, width: '100%' }}>
+            {screen === 'login' && <LoginScreen onLoginSuccess={handleLoginSuccess} />}
+            {screen === 'tickets' && studentId && <TicketScreen studentId={studentId} />}
+            {screen === 'ticketList' && currentUser && (
+                <TicketListScreen
+                    teacherId={teacherId}
+                    studentId={studentId}
+                    userRole={currentUser.role}
+                />
+            )}
+            {screen === 'register' && adminId && ( <RegisterScreen onDone={() => setScreen('admin')} />
+            )}
+            {screen === 'admin' && adminId && <AdminScreen adminId={adminId} />}
+            {screen === 'lesson' && teacherId && (
+                <LessonScreen
+                    teacherId={teacherId}
+                    navigation={{ goBack: () => setScreen('ticketList') }}
+                />
+            )}
+            {screen === 'calendar' && studentId && <StudentCalendarScreen studentId={studentId} />}
+            {screen === 'teacherLessons' && teacherId && <TeacherLessonScreen teacherId={teacherId} />}
+
+            {screen === 'attendance' && currentUser && (
+                <AttendanceScreen userRole={currentUser.role} teacherId={teacherId} />
+            )}
+            {screen === 'gradeTeacher' && teacherId && <GradeTeacherScreen teacherId={teacherId} />}
+            {screen === 'gradeStudent' && studentId && <GradeStudentScreen studentId={studentId} />}
+          </View>
+        </View>
+      </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safe: {
+    flex: 1,
+    backgroundColor: theme.colors.bg,
+  },
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
+    gap: 12,
+  },
+  logo: {
+    width: '100%',
+    alignSelf: 'center',
+    height: 60,
+    padding: 40,
+    margin: 10,
+  },
+  userChip: {
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  userName: {
+    color: theme.colors.text,
+    fontWeight: '600',
+  },
+  roleBadge: {
+    color: theme.colors.text,
+    backgroundColor: theme.colors.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    overflow: 'hidden',
+    textTransform: 'capitalize',
+    fontSize: 12,
+  },
+  logoutBtn: {
+    backgroundColor: theme.colors.danger,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  logoutText: {
+    color: 'white',
+    fontWeight: '700',
+  },
+  body: {
+    flex: 1,
+    padding: 16,
+    gap: 16,
+  },
+  actionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  actionBtn: {
+    width: '48%',
+    height: theme.h.touch,
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  actionIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+  },
+  actionLabel: {
+    color: theme.colors.text,
+    fontWeight: '600',
+  },
+  welcomeCard: {
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    padding: 16,
+    marginTop: 8,
+  },
+  welcomeTitle: {
+    color: theme.colors.text,
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  welcomeText: {
+    color: theme.colors.textMuted,
+  },
   banner: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#2d98da',
-    paddingVertical: 18,
-    paddingHorizontal: 20,
+    backgroundColor: theme.colors.banner,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     zIndex: 100,
     elevation: 10,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
-    alignItems: 'center'
+    borderBottomLeftRadius: theme.radius,
+    borderBottomRightRadius: theme.radius,
+  },
+  bannerTitle: {
+    color: 'white',
+    fontWeight: '700',
+    marginBottom: 4,
   },
   bannerText: {
     color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
-    textAlign: 'center'
+    fontSize: 14,
+    lineHeight: 20,
   },
-  userInfoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-    paddingHorizontal: 20,
+  simpleIcon: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    backgroundColor: theme.colors.primary,
   },
-  userInfo: {
-    flex: 1,
-    textAlign: 'center',
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: theme.colors.success,
   },
-  logoutButton: {
-    backgroundColor: '#e74c3c',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 5,
-  },
-  logoutText: {
-    color: 'white',
-    fontWeight: 'bold',
-  }
 });
