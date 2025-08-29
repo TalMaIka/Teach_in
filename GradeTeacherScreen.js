@@ -1,5 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator, Alert, FlatList, Modal } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+    View,
+    Text,
+    StyleSheet,
+    TouchableOpacity,
+    TextInput,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    Modal,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView
+} from 'react-native';
 
 const theme = {
     colors: {
@@ -21,7 +34,10 @@ function Select({ label, value, onPress }) {
     return (
         <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={styles.select}>
             <Text style={styles.selectLabel}>{label}</Text>
-            <Text style={[styles.selectValue, { color: value ? theme.colors.text : theme.colors.textMuted }]} numberOfLines={1}>
+            <Text
+                style={[styles.selectValue, { color: value ? theme.colors.text : theme.colors.textMuted }]}
+                numberOfLines={1}
+            >
                 {value || 'Select…'}
             </Text>
         </TouchableOpacity>
@@ -35,8 +51,8 @@ export default function GradeTeacherScreen({ teacherId }) {
     const [lessons, setLessons] = useState([]);
     const [students, setStudents] = useState([]);
 
-    const [lesson, setLesson] = useState(null); // {id,title}
-    const [student, setStudent] = useState(null); // {id,full_name}
+    const [lesson, setLesson] = useState(null);   // {id,title,date}
+    const [student, setStudent] = useState(null); // {id,full_name,email}
     const [grade, setGrade] = useState('');
     const [comment, setComment] = useState('');
     const [saving, setSaving] = useState(false);
@@ -112,7 +128,7 @@ export default function GradeTeacherScreen({ teacherId }) {
 
     if (loading) {
         return (
-            <View style={[styles.safe, { alignItems:'center', justifyContent:'center' }]}>
+            <View style={[styles.safe, { alignItems:'center', justifyContent:'center', padding:16 }]}>
                 <ActivityIndicator size="large" color={theme.colors.primary} />
                 <Text style={{ color: theme.colors.textMuted, marginTop: 8 }}>Loading…</Text>
             </View>
@@ -120,48 +136,57 @@ export default function GradeTeacherScreen({ teacherId }) {
     }
 
     return (
-        <View style={styles.safe}>
-            <Text style={styles.title}>Grade a Student</Text>
+        <KeyboardAvoidingView
+            style={styles.safe}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+            <ScrollView
+                contentContainerStyle={styles.scroll}
+                keyboardShouldPersistTaps="handled"
+            >
+                <Text style={styles.title}>Grade a Student</Text>
 
-            <View style={styles.card}>
-                <Select
-                    label="Lesson"
-                    value={lesson ? `${lesson.title} — ${lesson.date}` : ''}
-                    onPress={() => setOpenLessons(true)}
-                />
-                <Select
-                    label="Student"
-                    value={student ? student.full_name : ''}
-                    onPress={() => setOpenStudents(true)}
-                />
+                <View style={styles.card}>
+                    <Select
+                        label="Lesson"
+                        value={lesson ? `${lesson.title} — ${lesson.date}` : ''}
+                        onPress={() => setOpenLessons(true)}
+                    />
+                    <Select
+                        label="Student"
+                        value={student ? student.full_name : ''}
+                        onPress={() => setOpenStudents(true)}
+                    />
 
-                <Text style={styles.label}>Grade (0–100)</Text>
-                <TextInput
-                    keyboardType="numeric"
-                    value={grade}
-                    onChangeText={setGrade}
-                    style={styles.input}
-                    placeholder="e.g. 86"
-                    placeholderTextColor={theme.colors.textMuted}
-                />
+                    <Text style={styles.label}>Grade (0–100)</Text>
+                    <TextInput
+                        keyboardType="numeric"
+                        value={grade}
+                        onChangeText={setGrade}
+                        style={styles.input}
+                        placeholder="e.g. 86"
+                        placeholderTextColor={theme.colors.textMuted}
+                        returnKeyType="done"
+                    />
 
-                <Text style={styles.label}>Comment</Text>
-                <TextInput
-                    value={comment}
-                    onChangeText={setComment}
-                    style={[styles.input, { height: 100, textAlignVertical:'top' }]}
-                    multiline
-                    placeholder="Optional feedback"
-                    placeholderTextColor={theme.colors.textMuted}
-                />
+                    <Text style={styles.label}>Comment</Text>
+                    <TextInput
+                        value={comment}
+                        onChangeText={setComment}
+                        style={[styles.input, { height: 120, textAlignVertical:'top' }]}
+                        multiline
+                        placeholder="Optional feedback"
+                        placeholderTextColor={theme.colors.textMuted}
+                    />
 
-                <TouchableOpacity onPress={submit} disabled={saving} style={[styles.primaryBtn, saving && { opacity: 0.6 }]}>
-                    <Text style={styles.primaryBtnText}>{saving ? 'Saving…' : 'Save Grade'}</Text>
-                </TouchableOpacity>
-            </View>
+                    <TouchableOpacity onPress={submit} disabled={saving} style={[styles.primaryBtn, saving && { opacity: 0.6 }]}>
+                        <Text style={styles.primaryBtnText}>{saving ? 'Saving…' : 'Save Grade'}</Text>
+                    </TouchableOpacity>
+                </View>
+            </ScrollView>
 
             {/* Lesson chooser */}
-            <Modal visible={openLessons} transparent animationType="fade" onRequestClose={()=>setOpenLessons(false)}>
+            <Modal visible={openLessons} transparent animationType="fade" onRequestClose={() => setOpenLessons(false)}>
                 <View style={styles.overlay}>
                     <View style={styles.sheet}>
                         <Text style={styles.sheetTitle}>Select Lesson</Text>
@@ -169,18 +194,20 @@ export default function GradeTeacherScreen({ teacherId }) {
                             data={lessons}
                             keyExtractor={(i)=>String(i.id)}
                             renderItem={({item}) => (
-                                <TouchableOpacity style={styles.row} onPress={()=>{ setLesson(item); setOpenLessons(false); }}>
+                                <TouchableOpacity style={styles.row} onPress={() => { setLesson(item); setOpenLessons(false); }}>
                                     <Text style={styles.rowTxt}>{item.title} — {item.date}</Text>
                                 </TouchableOpacity>
                             )}
                         />
-                        <TouchableOpacity style={styles.closeBtn} onPress={()=>setOpenLessons(false)}><Text style={styles.closeTxt}>Close</Text></TouchableOpacity>
+                        <TouchableOpacity style={styles.closeBtn} onPress={() => setOpenLessons(false)}>
+                            <Text style={styles.closeTxt}>Close</Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
 
-            {/* Student chooser (enrolled to selected lesson if any, sinon tous) */}
-            <Modal visible={openStudents} transparent animationType="fade" onRequestClose={()=>setOpenStudents(false)}>
+            {/* Student chooser (enrolled to selected lesson if any, else all) */}
+            <Modal visible={openStudents} transparent animationType="fade" onRequestClose={() => setOpenStudents(false)}>
                 <View style={styles.overlay}>
                     <View style={styles.sheet}>
                         <Text style={styles.sheetTitle}>Select Student</Text>
@@ -188,22 +215,25 @@ export default function GradeTeacherScreen({ teacherId }) {
                             data={lesson ? enrolled : students}
                             keyExtractor={(i)=>String(i.id)}
                             renderItem={({item}) => (
-                                <TouchableOpacity style={styles.row} onPress={()=>{ setStudent(item); setOpenStudents(false); }}>
+                                <TouchableOpacity style={styles.row} onPress={() => { setStudent(item); setOpenStudents(false); }}>
                                     <Text style={styles.rowTxt}>{item.full_name} ({item.email})</Text>
                                 </TouchableOpacity>
                             )}
                             ListEmptyComponent={<Text style={{ color: theme.colors.textMuted, textAlign:'center' }}>No students</Text>}
                         />
-                        <TouchableOpacity style={styles.closeBtn} onPress={()=>setOpenStudents(false)}><Text style={styles.closeTxt}>Close</Text></TouchableOpacity>
+                        <TouchableOpacity style={styles.closeBtn} onPress={() => setOpenStudents(false)}>
+                            <Text style={styles.closeTxt}>Close</Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
-        </View>
+        </KeyboardAvoidingView>
     );
 }
 
 const styles = StyleSheet.create({
-    safe:{ flex:1, backgroundColor:theme.colors.bg, padding:16 },
+    safe:{ flex:1, backgroundColor:theme.colors.bg },
+    scroll:{ padding:16, paddingBottom:32 },
     title:{ color:theme.colors.text, fontSize:20, fontWeight:'800', textAlign:'center', marginBottom:16 },
     card:{ backgroundColor:theme.colors.card, borderWidth:1, borderColor:theme.colors.border, borderRadius:16, padding:16 },
     label:{ color:theme.colors.text, marginTop:12, marginBottom:6 },
