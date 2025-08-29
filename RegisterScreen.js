@@ -6,8 +6,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Modal,
+  FlatList,
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 
 /** Theme (kept consistent with the rest of the app) */
 const theme = {
@@ -53,13 +54,72 @@ function PrimaryButton({ title, onPress, disabled, loading }) {
   );
 }
 
+/** Small, themed modal selector for role */
+function RoleSelector({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const roles = [
+    { label: 'Student', value: 'student' },
+    { label: 'Teacher', value: 'teacher' },
+    { label: 'Admin', value: 'admin' },
+  ];
+
+  const current = roles.find(r => r.value === value)?.label || 'Select…';
+
+  return (
+    <>
+      <TouchableOpacity
+        onPress={() => setOpen(true)}
+        activeOpacity={0.85}
+        style={[styles.input, styles.selectLike]}
+      >
+        <Text style={[styles.selectText, { color: value ? theme.colors.text : theme.colors.textMuted }]}>
+          {current}
+        </Text>
+      </TouchableOpacity>
+
+      <Modal visible={open} transparent animationType="fade" onRequestClose={()=>setOpen(false)}>
+        <View style={styles.overlay}>
+          <View style={styles.sheet}>
+            <Text style={styles.sheetTitle}>Choose a role</Text>
+            <FlatList
+              data={roles}
+              keyExtractor={(i)=>i.value}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.optionRow,
+                    value === item.value && { borderColor: theme.colors.primary },
+                  ]}
+                  onPress={() => { onChange(item.value); setOpen(false); }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.optionLabel}>{item.label}</Text>
+                  {value === item.value && (
+                    <View style={styles.checkDot}/>
+                  )}
+                </TouchableOpacity>
+              )}
+              ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+              ListFooterComponent={
+                <TouchableOpacity style={styles.closeBtn} onPress={()=>setOpen(false)}>
+                  <Text style={styles.closeTxt}>Close</Text>
+                </TouchableOpacity>
+              }
+            />
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
 /**
  * RegisterScreen
  * Props:
  * - onDone?: () => void  // called after a successful registration (optional)
  */
 export default function RegisterScreen({ onDone }) {
-  const baseURL = 'http://10.0.2.2:3001'; // on a real device, use your LAN IP (e.g., http://192.168.x.x:3001)
+  const baseURL = 'http://10.0.2.2:3001';
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail]       = useState('');
@@ -118,13 +178,10 @@ export default function RegisterScreen({ onDone }) {
 
       if (res.ok) {
         setStatusMessage('Connected. Registration successful.');
-        // clear form
         setFullName('');
         setEmail('');
         setPassword('');
         setRole('student');
-
-        // Call parent hook if provided (e.g., navigate back to Admin panel)
         if (typeof onDone === 'function') onDone();
       } else {
         const errorText = await res.text();
@@ -203,18 +260,7 @@ export default function RegisterScreen({ onDone }) {
         )}
 
         <Label style={{ marginTop: 12 }}>Role</Label>
-        <View style={styles.pickerWrap}>
-          <Picker
-            selectedValue={role}
-            onValueChange={setRole}
-            dropdownIconColor={theme.colors.text}
-            style={styles.picker}
-          >
-            <Picker.Item label="Student" value="student" color="#fff" />
-            <Picker.Item label="Teacher" value="teacher" color="#fff" />
-            <Picker.Item label="Admin" value="admin" color="#fff" />
-          </Picker>
-        </View>
+        <RoleSelector value={role} onChange={setRole} />
 
         <PrimaryButton
           title={loading ? 'Registering…' : 'Register'}
@@ -290,15 +336,71 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: 16,
   },
-  pickerWrap: {
+
+  /** Themed modal selector **/
+  selectLike: {
+    justifyContent: 'center',
+  },
+  selectText: {
+    fontSize: 16,
+  },
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  sheet: {
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    padding: theme.gap,
+    width: '92%',
+    maxHeight: '75%',
+  },
+  sheetTitle: {
+    color: theme.colors.text,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  optionRow: {
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
     borderColor: theme.colors.border,
     borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: theme.colors.surface,
-    marginBottom: theme.gap,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  picker: { color: theme.colors.text },
+  optionLabel: {
+    color: theme.colors.text,
+    fontWeight: '600',
+  },
+  checkDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: theme.colors.primary,
+  },
+  closeBtn: {
+    marginTop: 12,
+    alignSelf: 'flex-end',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
+  },
+  closeTxt: { color: theme.colors.text, fontWeight: '700' },
+
+  /** Bottom **/
   primaryBtn: {
     marginTop: 8,
     paddingVertical: 16,
