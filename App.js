@@ -19,10 +19,9 @@ import LessonScreen from './screens/LessonScreen';
 import StudentCalendarScreen from './screens/StudentCalendarScreen';
 import TeacherLessonScreen from './screens/TeacherLessonScreen';
 import AttendanceScreen from './screens/AttendanceScreen';
+import GradeTeacherScreen from './screens/GradeTeacherScreen';
+import GradeStudentScreen from './screens/GradeStudentScreen';
 
-/**
- * THEME — palette & constants
- */
 const theme = {
   colors: {
     bg: '#0F172A', // app background (dark elegant)
@@ -212,6 +211,10 @@ export default function App() {
                           icon={<View style={styles.simpleIcon} />}
                           disabled={!studentId}
                       />
+                      <ActionButton label="Grade Students"
+                           onPress={() => setScreen('gradeTeacher')}
+                           icon={<View style={styles.simpleIcon} />}
+                           disabled={!teacherId} />
                     </>
                 )}
 
@@ -241,6 +244,11 @@ export default function App() {
                           icon={<View style={styles.simpleIcon} />}
                           disabled={!teacherId}
                       />
+                      <ActionButton label="Grade Students"
+                          onPress={() => setScreen('gradeTeacher')}
+                          icon={<View style={styles.simpleIcon} />}
+                          disabled={!teacherId} />
+
                     </>
                 )}
 
@@ -295,6 +303,8 @@ export default function App() {
             {screen === 'attendance' && currentUser && (
                 <AttendanceScreen userRole={currentUser.role} teacherId={teacherId} />
             )}
+            {screen === 'gradeTeacher' && teacherId && <GradeTeacherScreen teacherId={teacherId} />}
+            {screen === 'gradeStudent' && studentId && <GradeStudentScreen studentId={studentId} />}
           </View>
         </View>
       </SafeAreaView>

@@ -464,7 +464,125 @@ app.post('/attendance/mark', async (req, res) => {
     }
 });
 
+// === GRADES / NOTES ===
+
+// Every student of a teacher (to select whom to grade)
+app.get('/teachers/:teacherId/students', async (req, res) => {
+    const { teacherId } = req.params;
+    try {
+        const q = `
+      SELECT DISTINCT u.id, u.full_name, u.email
+      FROM lessons L
+      JOIN lesson_signups S ON S.lesson_id = L.id
+      JOIN users u ON u.id = S.student_id
+      WHERE L.teacher_id = $1
+      ORDER BY u.full_name ASC
+    `;
+        const r = await pool.query(q, [teacherId]);
+        res.json(r.rows);
+    } catch (e) {
+        res.status(500).send('Server error');
+    }
+});
+
+// Lessons of a teacher (needed to select which lesson to grade)
+app.get('/teachers/:teacherId/lessons', async (req, res) => {
+    const { teacherId } = req.params;
+    try {
+        const q = `
+      SELECT id, title, date, time
+      FROM lessons
+      WHERE teacher_id = $1
+      ORDER BY date ASC, time ASC
+    `;
+        const r = await pool.query(q, [teacherId]);
+        // normalise date
+        const lessons = r.rows.map(l => ({
+            ...l,
+            date: l.date instanceof Date ? l.date.toISOString().slice(0,10) : (l.date || '')
+        }));
+        res.json(lessons);
+    } catch (e) {
+        res.status(500).send('Server error');
+    }
+});
+
+// Upsert grade for a student in a lesson (by the teacher owning the lesson)
+app.post('/grades', async (req, res) => {
+    const { lesson_id, student_id, teacher_id, grade, comment } = req.body;
+    if (!lesson_id || !student_id || !teacher_id || grade == null) {
+        return res.status(400).send('Missing fields');
+    }
+    try {
+        // Vérifie que le cours appartient au prof
+        const owns = await pool.query(`SELECT 1 FROM lessons WHERE id=$1 AND teacher_id=$2`, [lesson_id, teacher_id]);
+        if (owns.rowCount === 0) return res.status(403).send('Not your lesson');
+
+        // (Optionnel) Vérifie que l’élève est inscrit
+        const enrolled = await pool.query(
+            `SELECT 1 FROM lesson_signups WHERE lesson_id=$1 AND student_id=$2`,
+            [lesson_id, student_id]
+        );
+        if (enrolled.rowCount === 0) return res.status(400).send('Student not signed up to this lesson');
+
+        const q = `
+      INSERT INTO grades (lesson_id, student_id, teacher_id, grade, comment)
+      VALUES ($1,$2,$3,$4,$5)
+      ON CONFLICT (lesson_id, student_id)
+      DO UPDATE SET grade=EXCLUDED.grade, comment=EXCLUDED.comment, updated_at=NOW()
+      RETURNING *;
+    `;
+        const r = await pool.query(q, [lesson_id, student_id, teacher_id, grade, comment || null]);
+        res.status(200).json(r.rows[0]);
+    } catch (e) {
+        res.status(500).send('Server error');
+    }
+});
+
+// Grade of student
+app.get('/students/:studentId/grades', async (req, res) => {
+    const { studentId } = req.params;
+    try {
+        const q = `
+      SELECT g.*, L.title AS lesson_title, L.date, L.time, T.full_name AS teacher_name
+      FROM grades g
+      JOIN lessons L ON L.id = g.lesson_id
+      JOIN users T ON T.id = g.teacher_id
+      WHERE g.student_id = $1
+      ORDER BY L.date DESC, L.time DESC
+    `;
+        const r = await pool.query(q, [studentId]);
+        const rows = r.rows.map(l => ({
+            ...l,
+            date: l.date instanceof Date ? l.date.toISOString().slice(0,10) : (l.date || '')
+        }));
+        res.json(rows);
+    } catch (e) {
+        res.status(500).send('Server error');
+    }
+});
+
+// Graph for distribution of grades for a lesson
+app.get('/lessons/:lessonId/grades', async (req, res) => {
+    const { lessonId } = req.params;
+    try {
+        const q = `
+      SELECT g.student_id, u.full_name, g.grade
+      FROM grades g
+      JOIN users u ON u.id = g.student_id
+      WHERE g.lesson_id = $1
+      ORDER BY u.full_name ASC
+    `;
+        const r = await pool.query(q, [lessonId]);
+        res.json(r.rows);
+    } catch (e) {
+        res.status(500).send('Server error');
+    }
+});
+
 // ---------- Server start ----------
 app.listen(3001, '0.0.0.0', () => {
     console.log('Backend running on http://0.0.0.0:3001');
 });
+
+
