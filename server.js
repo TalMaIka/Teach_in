@@ -580,6 +580,59 @@ app.get('/lessons/:lessonId/grades', async (req, res) => {
     }
 });
 
+// All grades given by a teacher (for review)
+app.get('/teachers/:teacherId/grades', async (req, res) => {
+    const { teacherId } = req.params;
+    try {
+        const q = `
+      SELECT
+        g.id,
+        g.grade,
+        g.comment,
+        g.created_at,
+        l.title AS lesson_title,
+        l.date,
+        u.full_name AS student_name
+      FROM grades g
+      JOIN lessons l ON l.id = g.lesson_id
+      JOIN users u ON u.id = g.student_id
+      WHERE g.teacher_id = $1
+      ORDER BY l.date DESC, l.time DESC NULLS LAST, g.created_at DESC
+    `;
+        const r = await pool.query(q, [teacherId]);
+        const rows = r.rows.map(x => ({
+            ...x,
+            date: x.date instanceof Date ? x.date.toISOString().slice(0,10) : (x.date || '')
+        }));
+        res.json(rows);
+    } catch (e) {
+        console.error(e);
+        res.status(500).send('Server error');
+    }
+});
+
+// stats for teacher (count, avg, min, max)
+app.get('/teachers/:teacherId/grades/stats', async (req, res) => {
+    const { teacherId } = req.params;
+    try {
+        const q = `
+      SELECT
+        COUNT(*)::int AS count,
+        ROUND(AVG(grade)::numeric, 2) AS avg,
+        MIN(grade) AS min,
+        MAX(grade) AS max
+      FROM grades
+      WHERE teacher_id = $1
+    `;
+        const r = await pool.query(q, [teacherId]);
+        res.json(r.rows[0]);
+    } catch (e) {
+        console.error(e);
+        res.status(500).send('Server error');
+    }
+});
+
+
 // ---------- Server start ----------
 app.listen(3001, '0.0.0.0', () => {
     console.log('Backend running on http://0.0.0.0:3001');
