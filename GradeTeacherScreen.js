@@ -42,7 +42,7 @@ function StatPill({ label, value }) {
 }
 
 export default function GradeTeacherScreen({ teacherId }) {
-  const baseURL = 'http://10.0.2.2:3001'; // use your LAN IP on a real device
+  const baseURL = 'http://10.0.2.2:3001';
 
   const [tab, setTab] = useState('grade');
 
@@ -51,46 +51,29 @@ export default function GradeTeacherScreen({ teacherId }) {
   const [lessons, setLessons] = useState([]);
   const [students, setStudents] = useState([]);
 
-  // Form
-  const [lesson, setLesson] = useState(null);   // {id,title,date,time}
-  const [student, setStudent] = useState(null); // {id,full_name,email}
+  // Form (Grade)
+  const [lesson, setLesson] = useState(null);
+  const [student, setStudent] = useState(null);
   const [grade, setGrade] = useState('');
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Modals
+  // Modals (Grade)
   const [openCalendar, setOpenCalendar] = useState(false);
   const [openStudents, setOpenStudents] = useState(false);
 
   // Enrolled students for chosen lesson
   const [enrolled, setEnrolled] = useState([]);
 
-  // Summary
+  // ===== Summary (calendar-first, no global fetch) =====
+  const [sumOpenCalendar, setSumOpenCalendar] = useState(false);
+  const [sumSelectedDate, setSumSelectedDate] = useState(null);
+  const [sumLesson, setSumLesson] = useState(null); // chosen lesson for summary
   const [sumLoading, setSumLoading] = useState(false);
   const [sumRefreshing, setSumRefreshing] = useState(false);
-  const [sumAllItems, setSumAllItems] = useState([]); // ALL grades of the teacher
-  const [sumLessonFilter, setSumLessonFilter] = useState(null); // selected lesson filter for Summary
-  const [openLessonFilter, setOpenLessonFilter] = useState(false);
+  const [sumItems, setSumItems] = useState([]);     // grades of the chosen lesson only
 
-  // Derived: filtered list for Summary
-  const sumItems = useMemo(() => {
-    if (!sumLessonFilter) return sumAllItems;
-    // Filter by lesson title + date to match API payload shape
-    return sumAllItems.filter(
-      it => it.lesson_title === sumLessonFilter.title && (it.date || '').slice(0,10) === (sumLessonFilter.date || '').slice(0,10)
-    );
-  }, [sumAllItems, sumLessonFilter]);
-
-  const sumStats = useMemo(() => {
-    const gs = sumItems.map(i => Number(i.grade)).filter(Number.isFinite);
-    const count = gs.length;
-    const avg = count ? (gs.reduce((a,b)=>a+b,0)/count) : 0;
-    const min = count ? Math.min(...gs) : null;
-    const max = count ? Math.max(...gs) : null;
-    return { count, avg: avg.toFixed(2), min, max };
-  }, [sumItems]);
-
-  // Initial data
+  // ===== Initial data (teacher lessons + students) =====
   useEffect(() => {
     (async () => {
       try {
@@ -103,7 +86,7 @@ export default function GradeTeacherScreen({ teacherId }) {
         const sjs = await S.json().catch(()=>[]);
         setLessons(Array.isArray(ljs) ? ljs : []);
         setStudents(Array.isArray(sjs) ? sjs : []);
-      } catch (e) {
+      } catch {
         Alert.alert('Error', 'Failed to load teacher data');
       } finally {
         setLoading(false);
@@ -111,7 +94,7 @@ export default function GradeTeacherScreen({ teacherId }) {
     })();
   }, [teacherId]);
 
-  // Load enrolled for lesson
+  // ===== Grade: load enrolled when lesson changes =====
   useEffect(() => {
     (async () => {
       if (!lesson) { setEnrolled([]); setStudent(null); return; }
@@ -126,7 +109,7 @@ export default function GradeTeacherScreen({ teacherId }) {
     })();
   }, [lesson]);
 
-  // Submit grade
+  // ===== Submit grade =====
   const submit = async () => {
     const n = Number(grade);
     if (!lesson || !student) return Alert.alert('Missing data', 'Please select a lesson and a student.');
@@ -156,7 +139,7 @@ export default function GradeTeacherScreen({ teacherId }) {
     }
   };
 
-  // Calendar helpers
+  // ===== Calendar helpers (shared) =====
   const lessonsByDate = useMemo(() => {
     const map = {};
     for (const l of lessons) {
@@ -169,57 +152,58 @@ export default function GradeTeacherScreen({ teacherId }) {
 
   const [selectedDate, setSelectedDate] = useState(null);
 
-  const markedDates = useMemo(() => {
+  const makeMarked = (dateSel) => {
     const marks = {};
     Object.keys(lessonsByDate).forEach(d => {
       marks[d] = {
         marked: true,
         dotColor: theme.colors.primary,
-        selected: selectedDate === d,
+        selected: dateSel === d,
         selectedColor: theme.colors.primary
       };
     });
-    if (selectedDate && !marks[selectedDate]) {
-      marks[selectedDate] = { selected: true, selectedColor: theme.colors.primary };
+    if (dateSel && !marks[dateSel]) {
+      marks[dateSel] = { selected: true, selectedColor: theme.colors.primary };
     }
     return marks;
-  }, [lessonsByDate, selectedDate]);
+  };
 
-  const lessonsForSelectedDate = useMemo(() => {
-    return selectedDate ? (lessonsByDate[selectedDate] || []) : [];
-  }, [selectedDate, lessonsByDate]);
+  const markedDatesGrade   = useMemo(() => makeMarked(selectedDate),    [lessonsByDate, selectedDate]);
+  const markedDatesSummary = useMemo(() => makeMarked(sumSelectedDate), [lessonsByDate, sumSelectedDate]);
 
-  // ===== Summary (fetch all then filter) =====
-  const loadSummary = useCallback(async () => {
+  const lessonsForDate = (d) => (d ? (lessonsByDate[d] || []) : []);
+
+  // ===== Summary: load one-lesson grades =====
+  const loadLessonSummary = useCallback(async (lessonId) => {
     try {
       setSumLoading(true);
-      const url = `${baseURL}/teachers/${teacherId}/grades`;
-      const r = await fetch(url);
-      if (!r.ok) {
-        const txt = await r.text();
-        throw new Error(txt || `Failed to load summary (${r.status})`);
-      }
-      const items = await r.json();
-      const arr = Array.isArray(items) ? items : [];
-      setSumAllItems(arr);
+      const r = await fetch(`${baseURL}/lessons/${lessonId}/grades`);
+      if (!r.ok) throw new Error(await r.text());
+      const arr = await r.json();
+      setSumItems(Array.isArray(arr) ? arr : []);
     } catch (e) {
-      Alert.alert('Summary error', e?.message || 'Cannot load teacher grades');
-      setSumAllItems([]);
+      Alert.alert('Summary', e?.message || 'Cannot load grades for this lesson');
+      setSumItems([]);
     } finally {
       setSumLoading(false);
     }
-  }, [teacherId]);
+  }, []);
 
-  const refreshSummary = useCallback(async () => {
+  const onRefreshSummary = useCallback(async () => {
+    if (!sumLesson) return;
     setSumRefreshing(true);
-    await loadSummary();
+    await loadLessonSummary(sumLesson.id);
     setSumRefreshing(false);
-  }, [loadSummary]);
+  }, [sumLesson, loadLessonSummary]);
 
-  // Auto-load when switching to Summary
-  useEffect(() => {
-    if (tab === 'summary') loadSummary();
-  }, [tab, loadSummary]);
+  const sumStats = useMemo(() => {
+    const gs = sumItems.map(i => Number(i.grade)).filter(Number.isFinite);
+    const count = gs.length;
+    const avg = count ? (gs.reduce((a,b)=>a+b,0)/count) : 0;
+    const min = count ? Math.min(...gs) : null;
+    const max = count ? Math.max(...gs) : null;
+    return { count, avg: avg.toFixed(2), min, max };
+  }, [sumItems]);
 
   if (loading) {
     return (
@@ -232,7 +216,7 @@ export default function GradeTeacherScreen({ teacherId }) {
 
   return (
     <View style={styles.safe}>
-      {/* Tabs - Fixed at top */}
+      {/* Tabs */}
       <View style={styles.tabs}>
         <TouchableOpacity onPress={()=>setTab('grade')} style={[styles.tabBtn, tab==='grade' && styles.tabBtnActive]}>
           <Text style={[styles.tabTxt, tab==='grade' && styles.tabTxtActive]}>Grade</Text>
@@ -242,20 +226,9 @@ export default function GradeTeacherScreen({ teacherId }) {
         </TouchableOpacity>
       </View>
 
-      {/* === TAB CONTENT WITH KEYBOARD AVOIDING === */}
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
         {tab === 'grade' ? (
-          <ScrollView
-            style={styles.scrollContainer}
-            contentContainerStyle={styles.scroll}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={true}
-            bounces={true}
-          >
+          <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
             <Text style={styles.title}>Grade a Student</Text>
 
             <View style={styles.card}>
@@ -264,7 +237,6 @@ export default function GradeTeacherScreen({ teacherId }) {
                 value={lesson ? `${lesson.title} — ${lesson.date}` : (selectedDate ? `Date: ${selectedDate}` : '')}
                 onPress={() => setOpenCalendar(true)}
               />
-
               <Select
                 label="Student"
                 value={student ? student.full_name : ''}
@@ -301,82 +273,75 @@ export default function GradeTeacherScreen({ teacherId }) {
           <FlatList
             style={styles.scrollContainer}
             data={sumItems}
-            keyExtractor={(item) => String(item.id)}
+            keyExtractor={(item, idx) => String(item.student_id ?? idx)}
             contentContainerStyle={styles.scroll}
-            refreshControl={
-              <RefreshControl refreshing={sumRefreshing} onRefresh={refreshSummary} />
-            }
-            showsVerticalScrollIndicator={true}
+            refreshControl={<RefreshControl refreshing={sumRefreshing} onRefresh={onRefreshSummary} />}
             ListHeaderComponent={
               <>
                 <Text style={styles.title}>Teacher's Grade Summary</Text>
 
-                {/* Lesson filter */}
-                <View style={{ marginBottom: 8 }}>
-                  <Select
-                    label="Filter by lesson"
-                    value={
-                      sumLessonFilter
-                        ? `${sumLessonFilter.title} — ${sumLessonFilter.date}`
-                        : 'All lessons'
-                    }
-                    onPress={() => setOpenLessonFilter(true)}
-                  />
-                  {sumLessonFilter && (
-                    <TouchableOpacity
-                      onPress={() => setSumLessonFilter(null)}
-                      style={[styles.secondaryBtn, { marginTop: 8 }]}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={{ color: theme.colors.text, fontWeight:'700' }}>Clear filter</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
+                {/* Picker by calendar — required before showing anything */}
+                <Select
+                  label="Pick lesson by date"
+                  value={sumLesson ? `${sumLesson.title} — ${(sumLesson.date || '').slice(0,10)} ${sumLesson.time || ''}` : ''}
+                  onPress={() => setSumOpenCalendar(true)}
+                />
 
-                <View style={styles.pillsRow}>
-                  <StatPill label="Total" value={sumStats.count} />
-                  <StatPill label="Average" value={sumStats.avg} />
-                  <StatPill label="Min" value={sumStats.min ?? '-'} />
-                  <StatPill label="Max" value={sumStats.max ?? '-'} />
-                </View>
-
-                {sumLoading && (
-                  <View style={{ paddingVertical: 24, alignItems:'center' }}>
-                    <ActivityIndicator color={theme.colors.primary} />
-                    <Text style={{ color: theme.colors.textMuted, marginTop: 8 }}>Loading…</Text>
+                {sumLesson ? (
+                  <View style={[styles.card, { marginTop: 8 }]}>
+                    <Text style={[styles.gradeSub, { marginBottom: 8 }]}>
+                      {sumLesson.title} — {(sumLesson.date || '').slice(0,10)} {sumLesson.time || ''}
+                    </Text>
+                    <View style={styles.pillsRow}>
+                      <StatPill label="Total" value={sumStats.count} />
+                      <StatPill label="Average" value={sumStats.avg} />
+                      <StatPill label="Min" value={sumStats.min ?? '-'} />
+                      <StatPill label="Max" value={sumStats.max ?? '-'} />
+                    </View>
+                    {sumLoading && (
+                      <View style={{ paddingVertical: 8, alignItems:'center' }}>
+                        <ActivityIndicator color={theme.colors.primary} />
+                        <Text style={{ color: theme.colors.textMuted, marginTop: 8 }}>Loading…</Text>
+                      </View>
+                    )}
                   </View>
+                ) : (
+                  <Text style={{ color: theme.colors.textMuted, marginTop: 8 }}>
+                    Select a lesson on the calendar to see its grades.
+                  </Text>
                 )}
               </>
             }
             renderItem={({ item }) => (
-              <View style={styles.gradeCard}>
-                <View style={{ flexDirection:'row', justifyContent:'space-between' }}>
-                  <Text style={styles.gradeTitle}>{item.student_name}</Text>
-                  <Text style={styles.gradeScore}>{Number(item.grade).toFixed(1)}</Text>
+              sumLesson ? (
+                <View style={styles.gradeCard}>
+                  <View style={{ flexDirection:'row', justifyContent:'space-between' }}>
+                    <Text style={styles.gradeTitle}>{item.full_name}</Text>
+                    <Text style={styles.gradeScore}>{Number(item.grade).toFixed(1)}</Text>
+                  </View>
+                  {/* The lesson title/date aren’t repeated since we’re in a per-lesson view */}
                 </View>
-                <Text style={styles.gradeSub}>{item.lesson_title} — {item.date}</Text>
-                {item.comment ? <Text style={styles.gradeComment}>{item.comment}</Text> : null}
-              </View>
+              ) : null
             )}
             ListEmptyComponent={
-              !sumLoading && (
+              sumLesson && !sumLoading ? (
                 <Text style={{ color: theme.colors.textMuted, textAlign:'center', marginTop: 8 }}>
-                  No grades found.
+                  No grades for this lesson.
                 </Text>
-              )
+              ) : null
             }
           />
         )}
       </KeyboardAvoidingView>
 
-      {/* ==== CALENDAR MODAL ==== */}
+      {/* ==== CALENDAR (Grade) ==== */}
       <Modal visible={openCalendar} transparent animationType="fade" onRequestClose={() => setOpenCalendar(false)}>
         <View style={styles.overlay}>
           <View style={[styles.sheet, { paddingBottom: 8 }]}>
             <Text style={styles.sheetTitle}>Pick a date</Text>
             <Calendar
               onDayPress={(d)=>setSelectedDate(d.dateString)}
-              markedDates={markedDates}
+              markedDates={markedDatesGrade}
               theme={{
                 calendarBackground: theme.colors.card,
                 dayTextColor: theme.colors.text,
@@ -391,7 +356,7 @@ export default function GradeTeacherScreen({ teacherId }) {
               {selectedDate ? `Lessons on ${selectedDate}` : 'No date selected'}
             </Text>
             <FlatList
-              data={lessonsForSelectedDate}
+              data={lessonsForDate(selectedDate)}
               keyExtractor={(i)=>String(i.id)}
               ListEmptyComponent={
                 <Text style={{ color: theme.colors.textMuted, textAlign:'center' }}>
@@ -414,7 +379,7 @@ export default function GradeTeacherScreen({ teacherId }) {
         </View>
       </Modal>
 
-      {/* ==== STUDENT PICKER ==== */}
+      {/* ==== STUDENT PICKER (Grade) ==== */}
       <Modal visible={openStudents} transparent animationType="fade" onRequestClose={()=>setOpenStudents(false)}>
         <View style={styles.overlay}>
           <View style={styles.sheet}>
@@ -436,34 +401,50 @@ export default function GradeTeacherScreen({ teacherId }) {
         </View>
       </Modal>
 
-      {/* ==== LESSON FILTER (SUMMARY) ==== */}
-      <Modal visible={openLessonFilter} transparent animationType="fade" onRequestClose={()=>setOpenLessonFilter(false)}>
+      {/* ==== CALENDAR (Summary) ==== */}
+      <Modal visible={sumOpenCalendar} transparent animationType="fade" onRequestClose={()=>setSumOpenCalendar(false)}>
         <View style={styles.overlay}>
-          <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Filter by lesson</Text>
-
-            <TouchableOpacity
-              style={[styles.row, { marginBottom: 12 }]}
-              onPress={() => { setSumLessonFilter(null); setOpenLessonFilter(false); }}
-            >
-              <Text style={styles.rowTxt}>All lessons</Text>
-            </TouchableOpacity>
-
+          <View style={[styles.sheet, { paddingBottom: 8 }]}>
+            <Text style={styles.sheetTitle}>Pick a date for Summary</Text>
+            <Calendar
+              onDayPress={(d)=>setSumSelectedDate(d.dateString)}
+              markedDates={markedDatesSummary}
+              theme={{
+                calendarBackground: theme.colors.card,
+                dayTextColor: theme.colors.text,
+                monthTextColor: theme.colors.text,
+                textDisabledColor: theme.colors.textMuted,
+                arrowColor: theme.colors.primary,
+                todayTextColor: theme.colors.primary,
+              }}
+            />
+            <View style={{ height: 12 }} />
+            <Text style={[styles.sheetTitle, { marginBottom: 8 }]}>
+              {sumSelectedDate ? `Lessons on ${sumSelectedDate}` : 'No date selected'}
+            </Text>
             <FlatList
-              data={lessons}
+              data={lessonsForDate(sumSelectedDate)}
               keyExtractor={(i)=>String(i.id)}
+              ListEmptyComponent={
+                <Text style={{ color: theme.colors.textMuted, textAlign:'center' }}>
+                  {sumSelectedDate ? "No lessons that day" : "Pick a date"}
+                </Text>
+              }
               renderItem={({item}) => (
                 <TouchableOpacity
                   style={styles.row}
-                  onPress={() => { setSumLessonFilter(item); setOpenLessonFilter(false); }}
+                  onPress={async () => {
+                    setSumLesson(item);
+                    setSumOpenCalendar(false);
+                    setSumItems([]);
+                    await loadLessonSummary(item.id);
+                  }}
                 >
-                  <Text style={styles.rowTxt}>{item.title} — {(item.date || '').slice(0,10)} {item.time || ''}</Text>
+                  <Text style={styles.rowTxt}>{item.title} — {item.time || ''}</Text>
                 </TouchableOpacity>
               )}
-              ListEmptyComponent={<Text style={{ color: theme.colors.textMuted, textAlign:'center' }}>No lessons</Text>}
             />
-
-            <TouchableOpacity style={styles.closeBtn} onPress={()=>setOpenLessonFilter(false)}>
+            <TouchableOpacity style={styles.closeBtn} onPress={()=>setSumOpenCalendar(false)}>
               <Text style={styles.closeTxt}>Close</Text>
             </TouchableOpacity>
           </View>
