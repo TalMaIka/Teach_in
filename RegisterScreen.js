@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 
-/** Theme (assorti à App/Login/Lesson/Admin) */
+/** Theme (kept consistent with the rest of the app) */
 const theme = {
   colors: {
     bg: '#0F172A',
@@ -31,7 +31,12 @@ function Label({ children }) {
 }
 
 function Helper({ children, tone = 'muted' }) {
-  const color = tone === 'error' ? '#FCA5A5' : tone === 'success' ? theme.colors.success : theme.colors.textMuted;
+  const color =
+    tone === 'error'
+      ? '#FCA5A5'
+      : tone === 'success'
+        ? theme.colors.success
+        : theme.colors.textMuted;
   return <Text style={[styles.helper, { color }]}>{children}</Text>;
 }
 
@@ -48,26 +53,46 @@ function PrimaryButton({ title, onPress, disabled, loading }) {
   );
 }
 
-export default function RegisterScreen() {
+/**
+ * RegisterScreen
+ * Props:
+ * - onDone?: () => void  // called after a successful registration (optional)
+ */
+export default function RegisterScreen({ onDone }) {
+  const baseURL = 'http://10.0.2.2:3001'; // on a real device, use your LAN IP (e.g., http://192.168.x.x:3001)
+
   const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('student');
+  const [role, setRole]         = useState('student');
+
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [errors, setErrors] = useState({ fullName: '', email: '', password: '' });
   const [showPwd, setShowPwd] = useState(false);
 
   const isEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+
+  // Password strength (0..5)
   const pwdScore = useMemo(() => {
-    let s = 0; if (password.length >= 8) s++; if (/[A-Z]/.test(password)) s++; if (/[a-z]/.test(password)) s++; if (/\d/.test(password)) s++; if (/[^\w]/.test(password)) s++; return s; }, [password]);
-  const pwdHint = ['Très faible','Faible','Moyen','Correct','Bon','Excellent'][pwdScore] || 'Très faible';
+    let s = 0;
+    if (password.length >= 8) s++;
+    if (/[A-Z]/.test(password)) s++;
+    if (/[a-z]/.test(password)) s++;
+    if (/\d/.test(password)) s++;
+    if (/[^\w]/.test(password)) s++;
+    return s;
+  }, [password]);
+
+  const pwdHint = useMemo(() => {
+    return ['Very weak', 'Weak', 'Fair', 'Okay', 'Good', 'Excellent'][pwdScore] || 'Very weak';
+  }, [pwdScore]);
 
   const validate = () => {
     const next = { fullName: '', email: '', password: '' };
     if (!fullName.trim()) next.fullName = 'Full name is required';
     if (!email.trim()) next.email = 'Email is required';
-    else if (!isEmail(email)) next.email = 'Invalid email';
+    else if (!isEmail(email)) next.email = 'Invalid email address';
     if (!password) next.password = 'Password is required';
     else if (password.length < 6) next.password = 'At least 6 characters';
     setErrors(next);
@@ -76,27 +101,48 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     if (!validate()) return;
+
     setLoading(true);
     setStatusMessage('Connecting to server...');
     try {
-      const res = await fetch('http://10.0.2.2:3001/register', {
+      const res = await fetch(`${baseURL}/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ full_name: fullName.trim(), email: email.trim(), password, role }),
+        body: JSON.stringify({
+          full_name: fullName.trim(),
+          email: email.trim(),
+          password,
+          role,
+        }),
       });
+
       if (res.ok) {
         setStatusMessage('Connected. Registration successful.');
-        setFullName(''); setEmail(''); setPassword(''); setRole('student');
+        // clear form
+        setFullName('');
+        setEmail('');
+        setPassword('');
+        setRole('student');
+
+        // Call parent hook if provided (e.g., navigate back to Admin panel)
+        if (typeof onDone === 'function') onDone();
       } else {
         const errorText = await res.text();
-        setStatusMessage('Connected. Server returned error.');
-        setErrors((e) => ({ ...e, password: errorText || 'Registration failed' }));
+        setStatusMessage('Connected. Server returned an error.');
+        setErrors((e) => ({
+          ...e,
+          password: errorText || 'Registration failed',
+        }));
       }
     } catch (err) {
       setStatusMessage('Connection failed. Please try again.');
-      setErrors((e) => ({ ...e, password: 'Network error, try again later' }));
+      setErrors((e) => ({
+        ...e,
+        password: 'Network error, try again later',
+      }));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -108,7 +154,10 @@ export default function RegisterScreen() {
         <TextInput
           style={[styles.input, errors.fullName && styles.inputError]}
           value={fullName}
-          onChangeText={(t) => { setFullName(t); if (errors.fullName) setErrors((e) => ({ ...e, fullName: '' })); }}
+          onChangeText={(t) => {
+            setFullName(t);
+            if (errors.fullName) setErrors((e) => ({ ...e, fullName: '' }));
+          }}
           placeholder="Jane Doe"
           placeholderTextColor={theme.colors.textMuted}
         />
@@ -118,7 +167,10 @@ export default function RegisterScreen() {
         <TextInput
           style={[styles.input, errors.email && styles.inputError]}
           value={email}
-          onChangeText={(t) => { setEmail(t); if (errors.email) setErrors((e) => ({ ...e, email: '' })); }}
+          onChangeText={(t) => {
+            setEmail(t);
+            if (errors.email) setErrors((e) => ({ ...e, email: '' }));
+          }}
           keyboardType="email-address"
           autoCapitalize="none"
           placeholder="you@example.com"
@@ -131,7 +183,10 @@ export default function RegisterScreen() {
           <TextInput
             style={[styles.input, { flex: 1 }, errors.password && styles.inputError]}
             value={password}
-            onChangeText={(t) => { setPassword(t); if (errors.password) setErrors((e) => ({ ...e, password: '' })); }}
+            onChangeText={(t) => {
+              setPassword(t);
+              if (errors.password) setErrors((e) => ({ ...e, password: '' }));
+            }}
             secureTextEntry={!showPwd}
             placeholder="••••••••"
             placeholderTextColor={theme.colors.textMuted}
@@ -142,12 +197,19 @@ export default function RegisterScreen() {
         </View>
         {!!errors.password && <Helper tone="error">{errors.password}</Helper>}
         {!!password && !errors.password && (
-          <Helper tone={pwdScore >= 3 ? 'success' : 'muted'}>Sécurité du mot de passe : {pwdHint}</Helper>
+          <Helper tone={pwdScore >= 3 ? 'success' : 'muted'}>
+            Password strength: {pwdHint}
+          </Helper>
         )}
 
         <Label style={{ marginTop: 12 }}>Role</Label>
         <View style={styles.pickerWrap}>
-          <Picker selectedValue={role} onValueChange={setRole} dropdownIconColor={theme.colors.text} style={styles.picker}>
+          <Picker
+            selectedValue={role}
+            onValueChange={setRole}
+            dropdownIconColor={theme.colors.text}
+            style={styles.picker}
+          >
             <Picker.Item label="Student" value="student" color="#fff" />
             <Picker.Item label="Teacher" value="teacher" color="#fff" />
             <Picker.Item label="Admin" value="admin" color="#fff" />
@@ -161,9 +223,7 @@ export default function RegisterScreen() {
           loading={loading}
         />
 
-        {!!statusMessage && (
-          <Text style={styles.status}>{statusMessage}</Text>
-        )}
+        {!!statusMessage && <Text style={styles.status}>{statusMessage}</Text>}
       </View>
     </View>
   );

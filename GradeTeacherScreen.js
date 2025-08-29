@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity, TextInput, ActivityIndicator,
-    Alert, FlatList, Modal, KeyboardAvoidingView, Platform, ScrollView, RefreshControl
+    Alert, FlatList, Modal, KeyboardAvoidingView, Platform, RefreshControl
 } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 
@@ -42,9 +42,8 @@ function StatPill({ label, value }) {
 }
 
 export default function GradeTeacherScreen({ teacherId }) {
-    const baseURL = 'http://10.0.2.2:3001'; // change to your LAN IP on a real device
+    const baseURL = 'http://10.0.2.2:3001'; // use your LAN IP on a real device
 
-    // Tabs: 'grade' | 'summary'
     const [tab, setTab] = useState('grade');
 
     // Data
@@ -52,7 +51,7 @@ export default function GradeTeacherScreen({ teacherId }) {
     const [lessons, setLessons] = useState([]);
     const [students, setStudents] = useState([]);
 
-    // Grade form
+    // Form
     const [lesson, setLesson] = useState(null);   // {id,title,date,time}
     const [student, setStudent] = useState(null); // {id,full_name,email}
     const [grade, setGrade] = useState('');
@@ -63,16 +62,17 @@ export default function GradeTeacherScreen({ teacherId }) {
     const [openCalendar, setOpenCalendar] = useState(false);
     const [openStudents, setOpenStudents] = useState(false);
 
-    // Students enrolled to selected lesson
+    // Enrolled students for chosen lesson
     const [enrolled, setEnrolled] = useState([]);
 
-    // Summary
+    // Summary (no scroll)
     const [sumLoading, setSumLoading] = useState(false);
     const [sumRefreshing, setSumRefreshing] = useState(false);
     const [sumItems, setSumItems] = useState([]); // {id, student_name, lesson_title, date, grade, comment}
     const [sumStats, setSumStats] = useState({ count: 0, avg: '0.00', min: null, max: null });
+    const [visibleCount, setVisibleCount] = useState(5); // show first N rows, no scrolling
 
-    // Initial load
+    // Initial data
     useEffect(() => {
         (async () => {
             try {
@@ -93,7 +93,7 @@ export default function GradeTeacherScreen({ teacherId }) {
         })();
     }, [teacherId]);
 
-    // Load enrolled students for selected lesson
+    // Load enrolled for lesson
     useEffect(() => {
         (async () => {
             if (!lesson) { setEnrolled([]); setStudent(null); return; }
@@ -138,7 +138,7 @@ export default function GradeTeacherScreen({ teacherId }) {
         }
     };
 
-    // ===== Calendar (choose lesson by date) =====
+    // Calendar helpers
     const lessonsByDate = useMemo(() => {
         const map = {};
         for (const l of lessons) {
@@ -150,6 +150,7 @@ export default function GradeTeacherScreen({ teacherId }) {
     }, [lessons]);
 
     const [selectedDate, setSelectedDate] = useState(null);
+
     const markedDates = useMemo(() => {
         const marks = {};
         Object.keys(lessonsByDate).forEach(d => {
@@ -170,12 +171,20 @@ export default function GradeTeacherScreen({ teacherId }) {
         return selectedDate ? (lessonsByDate[selectedDate] || []) : [];
     }, [selectedDate, lessonsByDate]);
 
-    // ===== Summary =====
+    // ===== Summary (fetch and stats) =====
     const loadSummary = useCallback(async () => {
         try {
             setSumLoading(true);
-            const r = await fetch(`${baseURL}/teachers/${teacherId}/grades`);
-            if (!r.ok) throw new Error(await r.text());
+            const url = `${baseURL}/teachers/${teacherId}/grades`;
+            const r = await fetch(url);
+
+            // If the server returns plain text (e.g., 404 "Cannot GET /teachers/1/grade"),
+            // read it and show a friendly error.
+            if (!r.ok) {
+                const txt = await r.text();
+                throw new Error(txt || `Failed to load summary (${r.status})`);
+            }
+
             const items = await r.json();
             const arr = Array.isArray(items) ? items : [];
             setSumItems(arr);
@@ -186,8 +195,12 @@ export default function GradeTeacherScreen({ teacherId }) {
             const min = count ? Math.min(...gs) : null;
             const max = count ? Math.max(...gs) : null;
             setSumStats({ count, avg: avg.toFixed(2), min, max });
+
+            // reset visible rows each time you load
+            setVisibleCount(5);
         } catch (e) {
-            Alert.alert('Error', e?.message || 'Failed to load summary');
+            // Show the server text to help diagnose path/ID issues
+            Alert.alert('Summary error', e?.message || 'Cannot load teacher grades');
             setSumItems([]);
             setSumStats({ count:0, avg:'0.00', min:null, max:null });
         } finally {
@@ -201,7 +214,7 @@ export default function GradeTeacherScreen({ teacherId }) {
         setSumRefreshing(false);
     }, [loadSummary]);
 
-    // Auto-load summary when switching to the tab
+    // Auto-load when switching to Summary
     useEffect(() => {
         if (tab === 'summary') loadSummary();
     }, [tab, loadSummary]);
@@ -227,94 +240,123 @@ export default function GradeTeacherScreen({ teacherId }) {
                 </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-                {tab === 'grade' ? (
-                    <>
-                        <Text style={styles.title}>Grade a Student</Text>
+            {/* === TAB CONTENT === */}
+            {tab === 'grade' ? (
+                // Use a small FlatList just for consistent keyboard behavior (could be a ScrollView too)
+                <FlatList
+                    data={[1]}
+                    renderItem={() => (
+                        <>
+                            <Text style={styles.title}>Grade a Student</Text>
 
-                        <View style={styles.card}>
-                            {/* Lesson via calendar */}
-                            <Select
-                                label="Lesson (by date)"
-                                value={lesson ? `${lesson.title} — ${lesson.date}` : (selectedDate ? `Date: ${selectedDate}` : '')}
-                                onPress={() => setOpenCalendar(true)}
-                            />
+                            <View style={styles.card}>
+                                {/* Lesson via calendar */}
+                                <Select
+                                    label="Lesson (by date)"
+                                    value={lesson ? `${lesson.title} — ${lesson.date}` : (selectedDate ? `Date: ${selectedDate}` : '')}
+                                    onPress={() => setOpenCalendar(true)}
+                                />
 
-                            {/* Student */}
-                            <Select
-                                label="Student"
-                                value={student ? student.full_name : ''}
-                                onPress={() => setOpenStudents(true)}
-                            />
+                                {/* Student */}
+                                <Select
+                                    label="Student"
+                                    value={student ? student.full_name : ''}
+                                    onPress={() => setOpenStudents(true)}
+                                />
 
-                            <Text style={styles.label}>Grade (0–100)</Text>
-                            <TextInput
-                                keyboardType="numeric"
-                                value={grade}
-                                onChangeText={setGrade}
-                                style={styles.input}
-                                placeholder="e.g. 86"
-                                placeholderTextColor={theme.colors.textMuted}
-                                returnKeyType="done"
-                            />
+                                <Text style={styles.label}>Grade (0–100)</Text>
+                                <TextInput
+                                    keyboardType="numeric"
+                                    value={grade}
+                                    onChangeText={setGrade}
+                                    style={styles.input}
+                                    placeholder="e.g. 86"
+                                    placeholderTextColor={theme.colors.textMuted}
+                                    returnKeyType="done"
+                                />
 
-                            <Text style={styles.label}>Comment</Text>
-                            <TextInput
-                                value={comment}
-                                onChangeText={setComment}
-                                style={[styles.input, { height: 120, textAlignVertical:'top' }]}
-                                multiline
-                                placeholder="Optional feedback"
-                                placeholderTextColor={theme.colors.textMuted}
-                            />
+                                <Text style={styles.label}>Comment</Text>
+                                <TextInput
+                                    value={comment}
+                                    onChangeText={setComment}
+                                    style={[styles.input, { height: 120, textAlignVertical:'top' }]}
+                                    multiline
+                                    placeholder="Optional feedback"
+                                    placeholderTextColor={theme.colors.textMuted}
+                                />
 
-                            <TouchableOpacity onPress={submit} disabled={saving} style={[styles.primaryBtn, saving && { opacity: 0.6 }]}>
-                                <Text style={styles.primaryBtnText}>{saving ? 'Saving…' : 'Save Grade'}</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </>
-                ) : (
-                    <>
-                        <Text style={styles.title}>Teacher’s Grade Summary</Text>
-
-                        {/* Stats */}
-                        <View style={styles.pillsRow}>
-                            <StatPill label="Total" value={sumStats.count} />
-                            <StatPill label="Average" value={sumStats.avg} />
-                            <StatPill label="Min" value={sumStats.min ?? '-'} />
-                            <StatPill label="Max" value={sumStats.max ?? '-'} />
-                        </View>
-
-                        {/* Inline list */}
-                        {sumLoading ? (
-                            <View style={{ paddingVertical: 24, alignItems:'center' }}>
-                                <ActivityIndicator color={theme.colors.primary} />
-                                <Text style={{ color: theme.colors.textMuted, marginTop: 8 }}>Loading…</Text>
+                                <TouchableOpacity onPress={submit} disabled={saving} style={[styles.primaryBtn, saving && { opacity: 0.6 }]}>
+                                    <Text style={styles.primaryBtnText}>{saving ? 'Saving…' : 'Save Grade'}</Text>
+                                </TouchableOpacity>
                             </View>
-                        ) : (
-                            <FlatList
-                                data={sumItems}
-                                keyExtractor={(i)=>String(i.id)}
-                                refreshControl={<RefreshControl refreshing={sumRefreshing} onRefresh={refreshSummary} tintColor={theme.colors.primary} />}
-                                ListEmptyComponent={<Text style={{ color: theme.colors.textMuted, textAlign:'center' }}>No grades found.</Text>}
-                                contentContainerStyle={{ paddingBottom: 16 }}
-                                renderItem={({ item }) => (
-                                    <View style={styles.gradeCard}>
-                                        <View style={{ flexDirection:'row', justifyContent:'space-between' }}>
-                                            <Text style={styles.gradeTitle}>{item.student_name}</Text>
-                                            <Text style={styles.gradeScore}>{Number(item.grade).toFixed(1)}</Text>
-                                        </View>
-                                        <Text style={styles.gradeSub}>{item.lesson_title} — {item.date}</Text>
-                                        {item.comment ? <Text style={styles.gradeComment}>{item.comment}</Text> : null}
-                                    </View>
-                                )}
-                            />
-                        )}
-                    </>
-                )}
-            </ScrollView>
+                        </>
+                    )}
+                    keyExtractor={() => 'form'}
+                    contentContainerStyle={styles.scroll}
+                    keyboardShouldPersistTaps="handled"
+                />
+            ) : (
+                // SUMMARY: strictly NO SCROLL. Static view + "Show more" to expand.
+                <View style={[styles.scroll, { flex: 1 }]}>
+                    <Text style={styles.title}>Teacher’s Grade Summary</Text>
 
-            {/* ==== CALENDAR MODAL (choose day + lesson) ==== */}
+                    <View style={styles.pillsRow}>
+                        <StatPill label="Total" value={sumStats.count} />
+                        <StatPill label="Average" value={sumStats.avg} />
+                        <StatPill label="Min" value={sumStats.min ?? '-'} />
+                        <StatPill label="Max" value={sumStats.max ?? '-'} />
+                    </View>
+
+                    {sumLoading ? (
+                        <View style={{ paddingVertical: 24, alignItems:'center' }}>
+                            <ActivityIndicator color={theme.colors.primary} />
+                            <Text style={{ color: theme.colors.textMuted, marginTop: 8 }}>Loading…</Text>
+                        </View>
+                    ) : (
+                        <>
+                            {sumItems.slice(0, visibleCount).map((item) => (
+                                <View key={item.id} style={styles.gradeCard}>
+                                    <View style={{ flexDirection:'row', justifyContent:'space-between' }}>
+                                        <Text style={styles.gradeTitle}>{item.student_name}</Text>
+                                        <Text style={styles.gradeScore}>{Number(item.grade).toFixed(1)}</Text>
+                                    </View>
+                                    <Text style={styles.gradeSub}>{item.lesson_title} — {item.date}</Text>
+                                    {item.comment ? <Text style={styles.gradeComment}>{item.comment}</Text> : null}
+                                </View>
+                            ))}
+
+                            {/* Buttons row: Refresh + Show more (no scrolling) */}
+                            <View style={{ flexDirection:'row', gap:8, marginTop: 4 }}>
+                                <TouchableOpacity
+                                    onPress={refreshSummary}
+                                    disabled={sumRefreshing}
+                                    style={[styles.secondaryBtn, sumRefreshing && { opacity: 0.6 }]}
+                                >
+                                    <Text style={styles.secondaryBtnText}>{sumRefreshing ? 'Refreshing…' : 'Refresh'}</Text>
+                                </TouchableOpacity>
+
+                                {visibleCount < sumItems.length && (
+                                    <TouchableOpacity
+                                        onPress={() => setVisibleCount((c) => Math.min(c + 5, sumItems.length))}
+                                        style={styles.secondaryBtn}
+                                    >
+                                        <Text style={styles.secondaryBtnText}>Show more</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+
+                            {/* If nothing */}
+                            {sumItems.length === 0 && (
+                                <Text style={{ color: theme.colors.textMuted, textAlign:'center', marginTop: 8 }}>
+                                    No grades found.
+                                </Text>
+                            )}
+                        </>
+                    )}
+                </View>
+            )}
+
+            {/* ==== CALENDAR MODAL ==== */}
             <Modal visible={openCalendar} transparent animationType="fade" onRequestClose={() => setOpenCalendar(false)}>
                 <View style={styles.overlay}>
                     <View style={[styles.sheet, { paddingBottom: 8 }]}>
@@ -386,7 +428,7 @@ export default function GradeTeacherScreen({ teacherId }) {
 
 const styles = StyleSheet.create({
     safe:{ flex:1, backgroundColor:theme.colors.bg },
-    scroll:{ padding:16, paddingBottom:32 },
+    scroll:{ padding:16, paddingBottom:16 },
 
     tabs:{ flexDirection:'row', gap:8, padding:16, paddingBottom:0 },
     tabBtn:{
@@ -409,12 +451,14 @@ const styles = StyleSheet.create({
     primaryBtn:{ backgroundColor:theme.colors.primary, paddingVertical:12, borderRadius:12, alignItems:'center', marginTop:16 },
     primaryBtnText:{ color:'#fff', fontWeight:'700' },
 
-    pillsRow:{ flexDirection:'row', gap:8, marginBottom:12, paddingHorizontal:16 },
+    secondaryBtn:{ flex:1, alignItems:'center', justifyContent:'center', backgroundColor:theme.colors.surface, borderWidth:1, borderColor:theme.colors.border, paddingVertical:12, borderRadius:12 },
+
+    pillsRow:{ flexDirection:'row', gap:8, marginBottom:12 },
     pill:{ backgroundColor:theme.colors.surface, borderWidth:1, borderColor:theme.colors.border, borderRadius:999, paddingVertical:8, paddingHorizontal:14 },
     pillLabel:{ color:theme.colors.textMuted, fontSize:12 },
     pillValue:{ color:theme.colors.text, fontWeight:'800', fontSize:16 },
 
-    gradeCard:{ backgroundColor:theme.colors.surface, borderWidth:1, borderColor:theme.colors.border, borderRadius:14, padding:12, marginBottom:10, marginHorizontal:16 },
+    gradeCard:{ backgroundColor:theme.colors.surface, borderWidth:1, borderColor:theme.colors.border, borderRadius:14, padding:12, marginBottom:10 },
     gradeTitle:{ color:theme.colors.text, fontWeight:'800' },
     gradeSub:{ color:theme.colors.textMuted, marginTop:2 },
     gradeScore:{ color:'#fff', backgroundColor:theme.colors.primary, borderRadius:10, paddingHorizontal:10, paddingVertical:4, overflow:'hidden', fontWeight:'800' },

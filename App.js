@@ -211,8 +211,9 @@ export default function App() {
                           icon={<View style={styles.simpleIcon} />}
                           disabled={!studentId}
                       />
-                      <ActionButton label="Grade Students"
-                           onPress={() => setScreen('gradeTeacher')}
+                      <ActionButton
+                           label="Grade Students"
+                           onPress={() => setScreen('gradeStudent')}
                            icon={<View style={styles.simpleIcon} />}
                            disabled={!teacherId} />
                     </>
@@ -266,6 +267,12 @@ export default function App() {
                           icon={<View style={styles.simpleIcon} />}
                           disabled={!adminId}
                       />
+                      <ActionButton
+                        label="Register User"
+                        onPress={() => setScreen('register')}
+                        icon={<View style={styles.simpleIcon} />}
+                        disabled={!adminId}
+                      />
                     </>
                 )}
               </View>
@@ -280,7 +287,7 @@ export default function App() {
 
           {/* Screens */}
           <View style={{ flex: 1, width: '100%' }}>
-            {screen === 'register' && <RegisterScreen />}
+            {screen === 'register' && adminId && <RegisterScreen />}
             {screen === 'login' && <LoginScreen onLoginSuccess={handleLoginSuccess} />}
             {screen === 'tickets' && studentId && <TicketScreen studentId={studentId} />}
             {screen === 'ticketList' && currentUser && (
@@ -289,6 +296,8 @@ export default function App() {
                     studentId={studentId}
                     userRole={currentUser.role}
                 />
+            )}
+            {screen === 'register' && adminId && ( <RegisterScreen onDone={() => setScreen('admin')} />
             )}
             {screen === 'admin' && adminId && <AdminScreen adminId={adminId} />}
             {screen === 'lesson' && teacherId && (
@@ -323,9 +332,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   logo: {
-    width: '85%',
+    width: '100%',
     alignSelf: 'center',
-    height: 185,
+    height: 60,
+    padding: 40,
+    margin: 10,
   },
   userChip: {
     backgroundColor: theme.colors.card,
