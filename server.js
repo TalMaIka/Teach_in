@@ -562,10 +562,22 @@ app.get('/students/:studentId/grades', async (req, res) => {
     }
 });
 
-// Graph for distribution of grades for a lesson
+// DÉJÀ EXISTANTE : Liste des notes d'un cours (détaillé)
+// => Désormais PROF UNIQUEMENT : vérifier que teacher_id possède le cours
 app.get('/lessons/:lessonId/grades', async (req, res) => {
     const { lessonId } = req.params;
+    const { teacher_id } = req.query; // <-- ex: /lessons/123/grades?teacher_id=45
+
+    if (!teacher_id) return res.status(400).send('Missing teacher_id');
+
     try {
+        // check ownership
+        const own = await pool.query('SELECT teacher_id FROM lessons WHERE id=$1', [lessonId]);
+        if (own.rowCount === 0) return res.status(404).send('Lesson not found');
+        if (Number(own.rows[0].teacher_id) !== Number(teacher_id)) {
+            return res.status(403).send('Forbidden');
+        }
+
         const q = `
       SELECT g.student_id, u.full_name, g.grade
       FROM grades g
@@ -576,6 +588,107 @@ app.get('/lessons/:lessonId/grades', async (req, res) => {
         const r = await pool.query(q, [lessonId]);
         res.json(r.rows);
     } catch (e) {
+        console.error(e);
+        res.status(500).send('Server error');
+    }
+});
+
+// Stats for a lesson (for a given student_id): my_grade, class_avg, class_count, my_rank
+app.get('/lessons/:lessonId/grade-stats', async (req, res) => {
+    const { lessonId } = req.params;
+    const { student_id } = req.query;
+    if (!student_id) return res.status(400).send('Missing student_id');
+
+    try {
+        // ta note
+        const me = await pool.query(
+            'SELECT grade FROM grades WHERE lesson_id=$1 AND student_id=$2',
+            [lessonId, student_id]
+        );
+        const my_grade = me.rowCount ? Number(me.rows[0].grade) : null;
+
+        // moyenne + count
+        const agg = await pool.query(
+            'SELECT AVG(grade) AS avg, COUNT(*) AS count FROM grades WHERE lesson_id=$1',
+            [lessonId]
+        );
+        const class_avg = agg.rows[0].avg ? Number(agg.rows[0].avg) : 0;
+        const class_count = Number(agg.rows[0].count || 0);
+
+        // rang (1 + nb de notes strictement supérieures)
+        let my_rank = null;
+        if (my_grade != null) {
+            const rk = await pool.query(
+                `
+          SELECT 1 + COUNT(*) AS rank
+          FROM grades
+          WHERE lesson_id=$1 AND grade > (
+            SELECT grade FROM grades WHERE lesson_id=$1 AND student_id=$2
+          )
+        `,
+                [lessonId, student_id]
+            );
+            my_rank = rk.rows[0]?.rank ? Number(rk.rows[0].rank) : 1;
+        }
+
+        res.json({
+            my_grade,
+            class_avg,
+            class_count,
+            my_rank,
+        });
+    } catch (e) {
+        console.error(e);
+        res.status(500).send('Server error');
+    }
+});
+
+// stats only for student
+app.get('/lessons/:lessonId/grade-stats', async (req, res) => {
+    const { lessonId } = req.params;
+    const { student_id } = req.query;
+    if (!student_id) return res.status(400).send('Missing student_id');
+
+    try {
+        // ta note
+        const me = await pool.query(
+            'SELECT grade FROM grades WHERE lesson_id=$1 AND student_id=$2',
+            [lessonId, student_id]
+        );
+        const my_grade = me.rowCount ? Number(me.rows[0].grade) : null;
+
+        // moyenne + count
+        const agg = await pool.query(
+            'SELECT AVG(grade) AS avg, COUNT(*) AS count FROM grades WHERE lesson_id=$1',
+            [lessonId]
+        );
+        const class_avg = agg.rows[0].avg ? Number(agg.rows[0].avg) : 0;
+        const class_count = Number(agg.rows[0].count || 0);
+
+        // rang (1 + nb de notes strictement supérieures)
+        let my_rank = null;
+        if (my_grade != null) {
+            const rk = await pool.query(
+                `
+          SELECT 1 + COUNT(*) AS rank
+          FROM grades
+          WHERE lesson_id=$1 AND grade > (
+            SELECT grade FROM grades WHERE lesson_id=$1 AND student_id=$2
+          )
+        `,
+                [lessonId, student_id]
+            );
+            my_rank = rk.rows[0]?.rank ? Number(rk.rows[0].rank) : 1;
+        }
+
+        res.json({
+            my_grade,
+            class_avg,
+            class_count,
+            my_rank,
+        });
+    } catch (e) {
+        console.error(e);
         res.status(500).send('Server error');
     }
 });
