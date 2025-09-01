@@ -1,4 +1,6 @@
-# Learning Management System 📚
+
+<p align="center"><img src="https://i.ibb.co/KxGTLxnw/logo-1.png" alt="Site-Scanner icon" height="100"/></p>
+<p align="center">
 
 A comprehensive learning management system built with React Native and Node.js, featuring role-based access control for students, teachers, and administrators.
 
