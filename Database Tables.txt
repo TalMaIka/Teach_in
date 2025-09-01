@@ -1,3 +1,46 @@
+CREATE TABLE users (
+  id SERIAL PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  password TEXT NOT NULL,
+  full_name TEXT NOT NULL,
+  role TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+CREATE TABLE lessons (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  "date" DATE NOT NULL,
+  time TEXT NOT NULL,
+  description TEXT,
+  teacher_id INTEGER REFERENCES users(id),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+CREATE TABLE lesson_signups (
+  id SERIAL PRIMARY KEY,
+  lesson_id INTEGER REFERENCES lessons(id),
+  student_id INTEGER REFERENCES users(id),
+  signed_up_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  present BOOLEAN
+);
+
+
+CREATE TABLE grades (
+  id SERIAL PRIMARY KEY,
+  lesson_id INTEGER REFERENCES lessons(id),
+  student_id INTEGER REFERENCES users(id),
+  teacher_id INTEGER REFERENCES users(id),
+  grade NUMERIC(5,2) NOT NULL CHECK (grade >= 0 AND grade <= 100),
+  comment TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT unique_lesson_student UNIQUE (lesson_id, student_id)
+);
+
+
 CREATE TABLE tickets (
   id SERIAL PRIMARY KEY,
   student_id INTEGER REFERENCES users(id),
@@ -7,15 +50,6 @@ CREATE TABLE tickets (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   status VARCHAR(50) DEFAULT 'open',
   response TEXT,
-  responded_at TIMESTAMP
-);
-
-
-CREATE TABLE users (
-  id SERIAL PRIMARY KEY,
-  email TEXT UNIQUE NOT NULL,
-  password TEXT NOT NULL,
-  full_name TEXT NOT NULL,
-  role TEXT NOT NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  responded_at TIMESTAMP,
+  attachment VARCHAR(255)
 );
